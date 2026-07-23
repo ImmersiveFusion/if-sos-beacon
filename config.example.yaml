@@ -1,0 +1,65 @@
+# sos-beacon example config (Phase 0: one-shot, HN source, openai-compatible AI,
+# Discord sink, file store). Copy to config.yaml and edit.
+#
+# Secrets never live in this file: every credential is named as an env var here
+# and read from the environment at runtime.
+#
+#   export OAI_KEY=...            # your LLM API key
+#   export OAI_BASE_URL=...       # e.g. https://api.openai.com/v1 or your Azure OpenAI base
+#   export SOS_APM_WEBHOOK=...    # a Discord channel webhook URL
+#   export SOS_AI_WEBHOOK=...
+#   ./sos-beacon -config config.yaml
+#
+# Phase 0 notes:
+# - `keywords` drives the HN query (one search per keyword) and the cheap
+#   pre-filter. The full boolean `filter` grammar (AND/OR/NOT) arrives in Phase 1.
+# - Phase 0 ships two real sources: `hn` (queried per keyword) and `lobsters`
+#   (an unfiltered newest-stories firehose narrowed by the keyword pre-filter).
+#   More sources (reddit, bluesky, mastodon, and so on) arrive in Phase 1.
+# - For Azure OpenAI, set `api_version` and point `base_url_env` at the deployment
+#   base; the adapter then uses the api-key header instead of Bearer auth.
+
+# ---- global backends (the ports' adapters) ----
+ai:
+  provider: openai-compatible
+  base_url_env: OAI_BASE_URL
+  model: gpt-5
+  key_env: OAI_KEY
+  # api_version: 2024-10-21   # uncomment for Azure OpenAI
+
+store:
+  type: file
+  path: ./sos-state.json
+
+beacons:
+  # A) default-template beacon (sufferers + incumbents)
+  - name: sos-apm
+    mode: dispatch
+    sources: [hn, lobsters]
+    keywords: [datadog, "new relic", observability, APM]
+    filter: '(datadog OR "new relic" OR observability OR APM) AND NOT (hiring OR job)'
+    context: |
+      IAPM is 3D/VR spatial observability APM on OpenTelemetry. Incumbents: Datadog,
+      New Relic, Grafana. Pain: alert fatigue, dashboard sprawl, MTTR, per-host pricing.
+    buckets:
+      - { name: seeker,           emoji: "🙋", definition: "actively asking for a tool recommendation" }
+      - { name: incumbent-rage,   emoji: "🔥", definition: "furious at a vendor's bill or behavior" }
+      - { name: problem-adjacent, emoji: "🌫️", definition: "describes the pain without asking for tools" }
+    destination: { type: discord, webhook_env: SOS_APM_WEBHOOK }
+    thresholds: { realtime: 0.75, digest: 0.50 }
+    max_age: 12h
+
+  # B) custom-bucket, watch-mode beacon (no rage/seeker anywhere)
+  - name: sos-ai
+    mode: watch
+    sources: [hn]
+    keywords: [AGI, "the model", benchmark, "AI safety"]
+    filter: '(AGI OR "the model" OR benchmark OR "AI safety") AND NOT hiring'
+    context: "Honest AI discourse: overstated claims, opaque proprietary agents, gamed benchmarks."
+    buckets:
+      - { name: hype-claim,        emoji: "🎈", definition: "overstated capability claim presented as fact" }
+      - { name: benchmark-dispute, emoji: "📊", definition: "contested or gamed benchmark result" }
+      - { name: genuine-question,  emoji: "🙋", definition: "someone actually asking, in good faith" }
+    destination: { type: discord, webhook_env: SOS_AI_WEBHOOK }
+    thresholds: { realtime: 0.80, digest: 0.50 }
+    max_age: 24h

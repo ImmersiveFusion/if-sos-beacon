@@ -1,0 +1,25 @@
+# Build output
+sos-beacon
+sos-beacon.exe
+dist/
+
+# Local runtime state + config (config.example.yaml is the template that ships)
+config.yaml
+sos-state.json
+.sos-state-*.tmp
+
+# Test
+*.test
+*.out
+coverage.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
