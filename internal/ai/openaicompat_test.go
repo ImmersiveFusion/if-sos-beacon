@@ -10,6 +10,10 @@ import (
 	"sync"
 	"testing"
 
+	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
 )
 
@@ -101,6 +105,51 @@ func TestClassify_AzureAuthHeader(t *testing.T) {
 	c := NewOpenAICompat(srv.URL, "dep", "azkey", "2024-10-21")
 	if _, err := c.Classify(context.Background(), core.Signal{Title: "x"}, sampleBeaconContext()); err != nil {
 		t.Fatalf("Classify: %v", err)
+	}
+}
+
+func TestClassify_RecordsGenAIUsageOnSpan(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{
+			"model": "gpt-x-2026",
+			"usage": {"prompt_tokens": 123, "completion_tokens": 45, "total_tokens": 168},
+			"choices": [{"finish_reason": "stop", "message": {"content": "{\"bucket\":\"seeker\",\"scores\":{},\"fit\":0.7,\"summary\":\"s\",\"reasoning\":\"r\"}"}}]
+		}`))
+	}))
+	defer srv.Close()
+
+	exp := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exp))
+	ctx, span := tp.Tracer("test").Start(context.Background(), "signal.classify")
+
+	c := NewOpenAICompat(srv.URL, "gpt-x", "sk-test", "")
+	if _, err := c.Classify(ctx, core.Signal{Title: "hi"}, sampleBeaconContext()); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+	span.End()
+
+	spans := exp.GetSpans()
+	if len(spans) != 1 {
+		t.Fatalf("got %d spans, want 1", len(spans))
+	}
+	attrs := map[string]attribute.Value{}
+	for _, kv := range spans[0].Attributes {
+		attrs[string(kv.Key)] = kv.Value
+	}
+	if v, ok := attrs["gen_ai.usage.input_tokens"]; !ok || v.AsInt64() != 123 {
+		t.Errorf("gen_ai.usage.input_tokens = %v (present=%v), want 123", v.AsInt64(), ok)
+	}
+	if v, ok := attrs["gen_ai.usage.output_tokens"]; !ok || v.AsInt64() != 45 {
+		t.Errorf("gen_ai.usage.output_tokens = %v (present=%v), want 45", v.AsInt64(), ok)
+	}
+	if v, ok := attrs["gen_ai.response.model"]; !ok || v.AsString() != "gpt-x-2026" {
+		t.Errorf("gen_ai.response.model = %q (present=%v), want gpt-x-2026", v.AsString(), ok)
+	}
+	if v, ok := attrs["gen_ai.request.model"]; !ok || v.AsString() != "gpt-x" {
+		t.Errorf("gen_ai.request.model = %q (present=%v), want gpt-x", v.AsString(), ok)
+	}
+	if _, ok := attrs["gen_ai.response.finish_reasons"]; !ok {
+		t.Error("gen_ai.response.finish_reasons missing")
 	}
 }
 

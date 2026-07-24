@@ -1,7 +1,8 @@
 // Package ai holds the AI-port adapters (Classifier implementations). The
 // default `openai-compatible` adapter speaks the OpenAI /chat/completions shape,
 // which covers Azure OpenAI, OpenAI, Ollama, vLLM, OpenRouter and Groq via
-// base_url + key + model. Adapters are dependency-free (stdlib only).
+// base_url + key + model. The only non-stdlib dependency is the OpenTelemetry
+// trace API, used to record GenAI token metadata on the active classify span.
 package ai
 
 import (
@@ -12,6 +13,9 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/prompts"
@@ -62,9 +66,16 @@ type responseFormat struct {
 }
 
 type chatResponse struct {
+	Model   string `json:"model"`
 	Choices []struct {
-		Message chatMessage `json:"message"`
+		Message      chatMessage `json:"message"`
+		FinishReason string      `json:"finish_reason"`
 	} `json:"choices"`
+	Usage struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage"`
 }
 
 // userPayload is the compact JSON the model classifies. Only surfaced fields.
@@ -137,10 +148,38 @@ func (c *OpenAICompat) Classify(ctx context.Context, s core.Signal, bc core.Beac
 		return core.Verdict{}, fmt.Errorf("no choices in response")
 	}
 
+	// Record the real token counts and model on the active classify span. Only
+	// metadata (never prompt/completion content) reaches the span; the telemetry
+	// allowlist enforces this at export as defense in depth.
+	c.recordGenAI(ctx, cr)
+
 	var v core.Verdict
 	content := cr.Choices[0].Message.Content
 	if err := json.Unmarshal([]byte(content), &v); err != nil {
 		return core.Verdict{}, fmt.Errorf("parse verdict json: %w", err)
 	}
 	return v, nil
+}
+
+// recordGenAI annotates the active span with OTel GenAI semantic-convention
+// attributes: operation, system, request/response model, token usage, and the
+// finish reason. No prompt or completion content is recorded. When no span is
+// active, SpanFromContext returns a no-op span and this is a cheap no-op.
+func (c *OpenAICompat) recordGenAI(ctx context.Context, cr chatResponse) {
+	span := trace.SpanFromContext(ctx)
+	if !span.IsRecording() {
+		return
+	}
+	span.SetAttributes(
+		attribute.String("gen_ai.operation.name", "chat"),
+		attribute.String("gen_ai.system", "openai"),
+		attribute.String("gen_ai.request.model", c.model),
+		attribute.String("gen_ai.response.model", cr.Model),
+		attribute.Int("gen_ai.usage.input_tokens", cr.Usage.PromptTokens),
+		attribute.Int("gen_ai.usage.output_tokens", cr.Usage.CompletionTokens),
+	)
+	if fr := cr.Choices[0].FinishReason; fr != "" {
+		// semconv models this as an array (a response can have several choices).
+		span.SetAttributes(attribute.StringSlice("gen_ai.response.finish_reasons", []string{fr}))
+	}
 }

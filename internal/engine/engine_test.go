@@ -9,6 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/config"
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
 )
@@ -244,6 +248,38 @@ func TestRunBeacon_NilDepsRejected(t *testing.T) {
 	_, err := RunBeacon(context.Background(), baseConfig(), Deps{}, discardLogger())
 	if err == nil {
 		t.Fatal("expected error for empty Deps")
+	}
+}
+
+// --- OTel span tree ---
+
+func TestRunBeacon_EmitsSpanTree(t *testing.T) {
+	exp := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exp))
+	prev := otel.GetTracerProvider()
+	otel.SetTracerProvider(tp)
+	defer otel.SetTracerProvider(prev)
+
+	store := newFakeStore()
+	deps := Deps{
+		Fetchers:   []core.Fetcher{&fakeFetcher{name: "hn", signals: []core.Signal{passingSignal()}}},
+		Classifier: &fakeClassifier{verdict: core.Verdict{Bucket: "seeker", Fit: 0.9, Reasoning: "asked for a tool"}},
+		Sink:       &fakeSink{},
+		Deduper:    store,
+		Recorder:   store,
+	}
+	if _, err := RunBeacon(context.Background(), baseConfig(), deps, discardLogger()); err != nil {
+		t.Fatalf("RunBeacon: %v", err)
+	}
+
+	names := map[string]bool{}
+	for _, s := range exp.GetSpans() {
+		names[s.Name] = true
+	}
+	for _, want := range []string{"beacon.poll", "source.fetch", "signal.classify", "finding.deliver"} {
+		if !names[want] {
+			t.Errorf("missing span %q; got %v", want, names)
+		}
 	}
 }
 

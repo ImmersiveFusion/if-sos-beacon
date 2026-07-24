@@ -82,6 +82,15 @@ docker run --rm \
 |---|---|---|
 | `-config` | `config.yaml` | path to the beacon config file |
 | `-log-level` | `info` | `debug`, `info`, `warn`, `error` (or set `SOS_BEACON_LOG_LEVEL`) |
+| `-interval` | `0` | container loop mode: poll every interval (e.g. `10m`); `0` is one-shot. A per-beacon `poll_interval` overrides it. |
+
+### Run modes
+
+Without `-interval` (and with no per-beacon `poll_interval`), the beacon makes **one pass over every beacon and exits**: the zero-infra path for a cron or a GitHub Actions schedule. Set `-interval 10m` (or a per-beacon `poll_interval`) to run as a **long-lived container**: each beacon polls on its own interval, sources are fetched sequentially per tick, and `SIGTERM` (or Ctrl-C) drains the in-flight poll and shuts down cleanly. The published image defaults to container use.
+
+### Tracing
+
+The beacon is OpenTelemetry-instrumented (`beacon.poll` -> `source.fetch` -> `signal.classify` -> `finding.deliver`), and the classify span carries OTel GenAI attributes including real token usage. Tracing is a no-op unless you point it at a collector via the standard `OTEL_EXPORTER_OTLP_ENDPOINT` (and related `OTEL_EXPORTER_OTLP_*`) env vars. An allowlist filter enforces span hygiene: only structure, metadata, and the one-line reasoning summary are exported. Full prompt/completion content and every secret (webhook URLs, API keys) are scrubbed before anything leaves the process.
 
 ### One-shot state durability
 

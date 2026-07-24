@@ -31,6 +31,20 @@ store:
   type: file
   path: ./sos-state.json
 
+# Azure SQL / SQL Server store (pure-Go driver, keeps CGO_ENABLED=0). Pick ONE
+# way to point at your own database; no server name or secret is baked into the
+# repo. Use a throwaway database for local runs.
+#
+# store:
+#   type: azuresql
+#   # (a) Entra / passwordless via local `az login` (fedauth=ActiveDirectoryDefault):
+#   server: your-server.database.windows.net
+#   database: sos_beacon
+#   # (b) or a full DSN instead of server+database:
+#   # dsn: "sqlserver://user:pass@your-server.database.windows.net?database=sos_beacon"
+#   # (c) or override either of the above from the environment (cluster secret-store path):
+#   #   export SOS_STORE_DSN="sqlserver://..."
+
 beacons:
   # A) default-template beacon (sufferers + incumbents)
   - name: sos-apm

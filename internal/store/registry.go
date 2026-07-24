@@ -16,9 +16,11 @@ type Constructor func(cfg config.StoreConfig) (core.Store, error)
 
 // registry maps a store type to its constructor. Adding a persistence backend
 // is a new file in this package plus one line here. Explicit map, no init().
-// Phase 0 ships the file store only; sqlite and azuresql land in later phases.
+// Phase 0 ships the file store; azuresql is pulled forward for real-DB runs;
+// sqlite lands later.
 var registry = map[string]Constructor{
-	"file": func(cfg config.StoreConfig) (core.Store, error) { return OpenFile(cfg.Path) },
+	"file":     func(cfg config.StoreConfig) (core.Store, error) { return OpenFile(cfg.Path) },
+	"azuresql": func(cfg config.StoreConfig) (core.Store, error) { return OpenAzureSQL(cfg) },
 }
 
 // Build opens the Store for cfg.Type. It wraps ErrUnknownStore when the type is

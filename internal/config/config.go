@@ -33,7 +33,15 @@ type AIConfig struct {
 type StoreConfig struct {
 	Type string `yaml:"type"` // file | sqlite | azuresql
 	Path string `yaml:"path"` // for file / sqlite
-	DSN  string `yaml:"dsn"`  // for azuresql
+
+	// azuresql: either give a full DSN, or a server + database that the adapter
+	// composes into a fedauth=ActiveDirectoryDefault DSN. A SOS_STORE_DSN env
+	// var overrides both (the cluster secret-store path). Never put a real
+	// server name or secret in a committed config (D12): these come from the
+	// operator's own config or environment.
+	DSN      string `yaml:"dsn"`
+	Server   string `yaml:"server"`
+	Database string `yaml:"database"`
 }
 
 // RedditConfig is per-beacon Reddit scoping (used from Phase 1).

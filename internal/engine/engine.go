@@ -10,9 +10,13 @@ import (
 	"log/slog"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/config"
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/filter"
+	"github.com/ImmersiveFusion/if-sos-beacon/internal/telemetry"
 )
 
 // Deps bundles the port adapters one beacon run needs. Persistence is taken as
@@ -72,14 +76,34 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 		Buckets: cfg.Buckets,
 	}
 
-	// --- fetch (over-collect from every source) ---
+	tracer := telemetry.Tracer()
+	ctx, pollSpan := tracer.Start(ctx, "beacon.poll")
+	pollSpan.SetAttributes(
+		attribute.String(telemetry.AttrBeacon, cfg.Name),
+		attribute.String(telemetry.AttrMode, cfg.Mode),
+	)
+	defer func() {
+		pollSpan.SetAttributes(
+			attribute.Int(telemetry.AttrFetched, st.Fetched),
+			attribute.Int(telemetry.AttrDelivered, st.Delivered),
+		)
+		pollSpan.End()
+	}()
+
+	// --- fetch (over-collect from every source, sequentially) ---
 	var signals []core.Signal
 	for _, f := range deps.Fetchers {
-		got, err := f.Fetch(ctx)
+		fctx, fspan := tracer.Start(ctx, "source.fetch")
+		fspan.SetAttributes(attribute.String(telemetry.AttrSource, f.Name()))
+		got, err := f.Fetch(fctx)
 		if err != nil {
 			st.Errors++
+			fspan.RecordError(err)
+			fspan.SetStatus(codes.Error, "fetch failed")
 			log.Warn("fetch failed", "beacon", cfg.Name, "source", f.Name(), "err", err)
 		}
+		fspan.SetAttributes(attribute.Int(telemetry.AttrFetched, len(got)))
+		fspan.End()
 		signals = append(signals, got...)
 	}
 	st.Fetched = len(signals)
@@ -114,14 +138,31 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 		}
 
 		// --- classify (LLM) ---
+		// One span per turn. The AI adapter enriches it with GenAI token
+		// metadata; here we record the pointer fields (source, post id) and, on
+		// return, the verdict's bucket/fit/reasoning summary. Never the content.
 		st.Classified++
-		v, err := deps.Classifier.Classify(ctx, s, bc)
+		cctx, cspan := tracer.Start(ctx, "signal.classify")
+		cspan.SetAttributes(
+			attribute.String(telemetry.AttrSource, s.Source),
+			attribute.String(telemetry.AttrPostID, s.ID),
+		)
+		v, err := deps.Classifier.Classify(cctx, s, bc)
 		if err != nil {
 			// No MarkSeen: leave it to retry on the next run.
 			st.Errors++
+			cspan.RecordError(err)
+			cspan.SetStatus(codes.Error, "classify failed")
+			cspan.End()
 			log.Warn("classify failed", "beacon", cfg.Name, "id", s.ID, "err", err)
 			continue
 		}
+		cspan.SetAttributes(
+			attribute.String(telemetry.AttrBucket, v.Bucket),
+			attribute.Float64(telemetry.AttrFit, v.Fit),
+			attribute.String(telemetry.AttrReasoningSummary, v.Reasoning),
+		)
+		cspan.End()
 
 		// --- decide ---
 		if v.Bucket == "noise" || v.Fit < cfg.Thresholds.Digest {
@@ -135,12 +176,23 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 		fnd := core.Finding{Beacon: cfg.Name, Signal: s, Verdict: v}
 
 		if v.Fit >= cfg.Thresholds.Realtime {
-			if err := deps.Sink.Deliver(ctx, fnd); err != nil {
+			dctx, dspan := tracer.Start(ctx, "finding.deliver")
+			dspan.SetAttributes(
+				attribute.String(telemetry.AttrSource, s.Source),
+				attribute.String(telemetry.AttrPostID, s.ID),
+				attribute.String(telemetry.AttrBucket, v.Bucket),
+				attribute.Float64(telemetry.AttrFit, v.Fit),
+			)
+			if err := deps.Sink.Deliver(dctx, fnd); err != nil {
 				// No Record/MarkSeen: retry delivery next run.
 				st.Errors++
+				dspan.RecordError(err)
+				dspan.SetStatus(codes.Error, "deliver failed")
+				dspan.End()
 				log.Warn("deliver failed", "beacon", cfg.Name, "id", s.ID, "err", err)
 				continue
 			}
+			dspan.End()
 			st.Delivered++
 		} else {
 			st.Digest++
