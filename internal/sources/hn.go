@@ -41,6 +41,11 @@ func NewHN(keywords []string) *HN {
 // Name identifies this source in Signal.Source and dedupe keys.
 func (h *HN) Name() string { return "hn" }
 
+// PrefiltersByKeyword reports that HN already narrowed results by keyword via
+// the search API (when any keyword was configured), so the engine can skip the
+// redundant, title-only client-side pre-filter for HN signals.
+func (h *HN) PrefiltersByKeyword() bool { return len(h.keywords) > 0 }
+
 // hnResponse is the slice of the Algolia payload we consume.
 type hnResponse struct {
 	Hits []hnHit `json:"hits"`

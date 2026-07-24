@@ -121,6 +121,16 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 	}
 	st.Fetched = len(signals)
 
+	// Sources that already narrowed by keyword server-side skip the redundant
+	// client-side pre-filter, whose title-only matching would drop legitimate
+	// hits that matched in the body or URL.
+	prefiltered := make(map[string]bool)
+	for _, f := range deps.Fetchers {
+		if kp, ok := f.(core.KeywordPrefilter); ok && kp.PrefiltersByKeyword() {
+			prefiltered[f.Name()] = true
+		}
+	}
+
 	now := time.Now()
 	for _, s := range signals {
 		// --- freshness ---
@@ -129,8 +139,8 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 			continue
 		}
 
-		// --- novelty (dedupe) ---
-		seen, err := deps.Deduper.Seen(s.Source, s.ID)
+		// --- novelty (dedupe, scoped to this beacon) ---
+		seen, err := deps.Deduper.Seen(cfg.Name, s.Source, s.ID)
 		if err != nil {
 			st.Errors++
 			log.Warn("seen check failed", "beacon", cfg.Name, "id", s.ID, "err", err)
@@ -141,10 +151,10 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 			continue
 		}
 
-		// --- pre-filter (cheap, deterministic) ---
-		if !filter.Match(s, cfg.Keywords, cfg.Filter) {
+		// --- pre-filter (cheap, deterministic; skipped for keyword-queried sources) ---
+		if !prefiltered[s.Source] && !filter.Match(s, cfg.Keywords, cfg.Filter) {
 			st.Filtered++
-			if err := deps.Deduper.MarkSeen(s.Source, s.ID); err != nil {
+			if err := deps.Deduper.MarkSeen(cfg.Name, s.Source, s.ID); err != nil {
 				log.Warn("mark seen failed", "beacon", cfg.Name, "id", s.ID, "err", err)
 			}
 			continue
@@ -182,7 +192,7 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 		// --- decide ---
 		if v.Bucket == "noise" || v.Fit < cfg.Thresholds.Digest {
 			st.Dropped++
-			if err := deps.Deduper.MarkSeen(s.Source, s.ID); err != nil {
+			if err := deps.Deduper.MarkSeen(cfg.Name, s.Source, s.ID); err != nil {
 				log.Warn("mark seen failed", "beacon", cfg.Name, "id", s.ID, "err", err)
 			}
 			continue

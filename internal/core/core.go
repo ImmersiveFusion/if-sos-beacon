@@ -67,6 +67,17 @@ type Fetcher interface {
 	Fetch(ctx context.Context) ([]Signal, error)
 }
 
+// KeywordPrefilter is an optional Fetcher capability. A source that already
+// narrowed its results by keyword server-side (a search API such as HN) may
+// implement it and return true, so the engine skips the redundant client-side
+// keyword pre-filter for that source's signals. Firehose sources (no server-
+// side keyword query, e.g. Lobsters) do not implement it, so the pre-filter
+// still gates them. This is what lets a keyword-queried source's hits reach the
+// classifier even when the match was in the body or URL rather than the title.
+type KeywordPrefilter interface {
+	PrefiltersByKeyword() bool
+}
+
 // Classifier (AI port) sorts a signal into a beacon's buckets with scores.
 type Classifier interface {
 	Classify(ctx context.Context, s Signal, bc BeaconContext) (Verdict, error)
@@ -84,10 +95,13 @@ type Sink interface {
 // fat Store except the wiring in main. Adapters (file, SQLite, Azure SQL)
 // implement the whole Store and satisfy every narrow role for free.
 
-// Deduper is the novelty set: has this (source, id) been processed before?
+// Deduper is the novelty set, scoped PER BEACON: has this beacon already
+// processed (source, id)? Scoping by beacon means a post that one beacon rejects
+// (or delivers) does not become invisible to another beacon that shares the same
+// source, e.g. the Lobsters firehose that every beacon fetches identically.
 type Deduper interface {
-	Seen(source, id string) (bool, error)
-	MarkSeen(source, id string) error
+	Seen(beacon, source, id string) (bool, error)
+	MarkSeen(beacon, source, id string) error
 }
 
 // Recorder persists a delivered or digest finding (and marks it seen).

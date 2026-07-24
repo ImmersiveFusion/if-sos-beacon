@@ -15,14 +15,14 @@ func TestFileStore_SeenRoundTrip(t *testing.T) {
 		t.Fatalf("OpenFile: %v", err)
 	}
 
-	seen, err := f.Seen("hn", "1")
+	seen, err := f.Seen("b", "hn", "1")
 	if err != nil {
 		t.Fatalf("Seen: %v", err)
 	}
 	if seen {
 		t.Fatal("fresh store should not report seen")
 	}
-	if err := f.MarkSeen("hn", "1"); err != nil {
+	if err := f.MarkSeen("b", "hn", "1"); err != nil {
 		t.Fatalf("MarkSeen: %v", err)
 	}
 
@@ -31,12 +31,28 @@ func TestFileStore_SeenRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
-	seen, err = f2.Seen("hn", "1")
+	seen, err = f2.Seen("b", "hn", "1")
 	if err != nil {
 		t.Fatalf("Seen after reopen: %v", err)
 	}
 	if !seen {
 		t.Fatal("mark did not persist across reopen")
+	}
+}
+
+func TestFileStore_SeenIsPerBeacon(t *testing.T) {
+	f, err := OpenFile(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatalf("OpenFile: %v", err)
+	}
+	if err := f.MarkSeen("beacon-a", "lobsters", "shared"); err != nil {
+		t.Fatalf("MarkSeen: %v", err)
+	}
+	if seen, _ := f.Seen("beacon-a", "lobsters", "shared"); !seen {
+		t.Error("beacon-a should see its own mark")
+	}
+	if seen, _ := f.Seen("beacon-b", "lobsters", "shared"); seen {
+		t.Error("beacon-b must NOT inherit beacon-a's mark for the same (source, id)")
 	}
 }
 
@@ -56,9 +72,9 @@ func TestFileStore_RecordMarksSeenAndAccumulates(t *testing.T) {
 		t.Fatalf("Record: %v", err)
 	}
 
-	seen, _ := f.Seen("hn", "42")
+	seen, _ := f.Seen("sos-apm", "hn", "42")
 	if !seen {
-		t.Error("Record should mark the signal seen")
+		t.Error("Record should mark the signal seen for its beacon")
 	}
 
 	pending, err := f.PendingDigest("sos-apm")

@@ -60,29 +60,30 @@ func OpenFile(path string) (*File, error) {
 	return f, nil
 }
 
-func key(source, id string) string { return source + ":" + id }
+func key(beacon, source, id string) string { return beacon + ":" + source + ":" + id }
 
-// Seen reports whether (source, id) has already been processed.
-func (f *File) Seen(source, id string) (bool, error) {
+// Seen reports whether the beacon has already processed (source, id).
+func (f *File) Seen(beacon, source, id string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.data.Seen[key(source, id)], nil
+	return f.data.Seen[key(beacon, source, id)], nil
 }
 
-// MarkSeen records (source, id) as processed without delivering it.
-func (f *File) MarkSeen(source, id string) error {
+// MarkSeen records (source, id) as processed for the beacon, without delivering.
+func (f *File) MarkSeen(beacon, source, id string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.data.Seen[key(source, id)] = true
+	f.data.Seen[key(beacon, source, id)] = true
 	return f.saveLocked()
 }
 
-// Record stores a delivered/digest finding and marks its signal seen.
+// Record stores a delivered/digest finding and marks its signal seen for the
+// finding's beacon.
 func (f *File) Record(fnd core.Finding) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.data.Findings = append(f.data.Findings, fnd)
-	f.data.Seen[key(fnd.Signal.Source, fnd.Signal.ID)] = true
+	f.data.Seen[key(fnd.Beacon, fnd.Signal.Source, fnd.Signal.ID)] = true
 	return f.saveLocked()
 }
 

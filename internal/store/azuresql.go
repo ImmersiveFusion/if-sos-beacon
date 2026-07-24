@@ -36,8 +36,8 @@ var schemaSQL string
 // use parameterized placeholders; fetched content never enters a statement as
 // text.
 const (
-	sqlSeenSelect    = `SELECT 1 FROM seen WHERE source = @p1 AND id = @p2`
-	sqlSeenInsert    = `IF NOT EXISTS (SELECT 1 FROM seen WHERE source = @p1 AND id = @p2) INSERT INTO seen (source, id) VALUES (@p1, @p2)`
+	sqlSeenSelect    = `SELECT 1 FROM seen WHERE beacon = @p1 AND source = @p2 AND id = @p3`
+	sqlSeenInsert    = `IF NOT EXISTS (SELECT 1 FROM seen WHERE beacon = @p1 AND source = @p2 AND id = @p3) INSERT INTO seen (beacon, source, id) VALUES (@p1, @p2, @p3)`
 	sqlFindingUpsert = `UPDATE finding SET data = @p4 WHERE beacon = @p1 AND source = @p2 AND id = @p3; IF @@ROWCOUNT = 0 INSERT INTO finding (beacon, source, id, data) VALUES (@p1, @p2, @p3, @p4)`
 	sqlPendingSelect = `SELECT data FROM finding WHERE beacon = @p1`
 	sqlClaimUpsert   = `UPDATE claim SET claimant = @p2, ts = SYSUTCDATETIME() WHERE finding_id = @p1; IF @@ROWCOUNT = 0 INSERT INTO claim (finding_id, claimant) VALUES (@p1, @p2)`
@@ -105,12 +105,12 @@ func (s *AzureSQL) opCtx() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), opTimeout)
 }
 
-// Seen reports whether (source, id) has already been processed.
-func (s *AzureSQL) Seen(source, id string) (bool, error) {
+// Seen reports whether the beacon has already processed (source, id).
+func (s *AzureSQL) Seen(beacon, source, id string) (bool, error) {
 	ctx, cancel := s.opCtx()
 	defer cancel()
 	var one int
-	err := s.db.QueryRowContext(ctx, sqlSeenSelect, source, id).Scan(&one)
+	err := s.db.QueryRowContext(ctx, sqlSeenSelect, beacon, source, id).Scan(&one)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -120,11 +120,11 @@ func (s *AzureSQL) Seen(source, id string) (bool, error) {
 	return true, nil
 }
 
-// MarkSeen records (source, id) as processed without delivering it.
-func (s *AzureSQL) MarkSeen(source, id string) error {
+// MarkSeen records (source, id) as processed for the beacon, without delivering.
+func (s *AzureSQL) MarkSeen(beacon, source, id string) error {
 	ctx, cancel := s.opCtx()
 	defer cancel()
-	if _, err := s.db.ExecContext(ctx, sqlSeenInsert, source, id); err != nil {
+	if _, err := s.db.ExecContext(ctx, sqlSeenInsert, beacon, source, id); err != nil {
 		return fmt.Errorf("azuresql: mark seen: %w", err)
 	}
 	return nil
@@ -149,7 +149,7 @@ func (s *AzureSQL) Record(f core.Finding) error {
 	if _, err := tx.ExecContext(ctx, sqlFindingUpsert, f.Beacon, f.Signal.Source, f.Signal.ID, string(data)); err != nil {
 		return fmt.Errorf("azuresql: upsert finding: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, sqlSeenInsert, f.Signal.Source, f.Signal.ID); err != nil {
+	if _, err := tx.ExecContext(ctx, sqlSeenInsert, f.Beacon, f.Signal.Source, f.Signal.ID); err != nil {
 		return fmt.Errorf("azuresql: mark seen: %w", err)
 	}
 	if err := tx.Commit(); err != nil {

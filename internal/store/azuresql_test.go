@@ -80,9 +80,9 @@ func newMock(t *testing.T) (*AzureSQL, sqlmock.Sqlmock) {
 func TestAzureSQL_Seen(t *testing.T) {
 	t.Run("present", func(t *testing.T) {
 		s, mock := newMock(t)
-		mock.ExpectQuery(sqlSeenSelect).WithArgs("hn", "1").
+		mock.ExpectQuery(sqlSeenSelect).WithArgs("b", "hn", "1").
 			WillReturnRows(sqlmock.NewRows([]string{"one"}).AddRow(1))
-		got, err := s.Seen("hn", "1")
+		got, err := s.Seen("b", "hn", "1")
 		if err != nil || !got {
 			t.Fatalf("Seen = %v, %v; want true, nil", got, err)
 		}
@@ -93,9 +93,9 @@ func TestAzureSQL_Seen(t *testing.T) {
 
 	t.Run("absent", func(t *testing.T) {
 		s, mock := newMock(t)
-		mock.ExpectQuery(sqlSeenSelect).WithArgs("hn", "2").
+		mock.ExpectQuery(sqlSeenSelect).WithArgs("b", "hn", "2").
 			WillReturnRows(sqlmock.NewRows([]string{"one"}))
-		got, err := s.Seen("hn", "2")
+		got, err := s.Seen("b", "hn", "2")
 		if err != nil || got {
 			t.Fatalf("Seen = %v, %v; want false, nil", got, err)
 		}
@@ -107,9 +107,9 @@ func TestAzureSQL_Seen(t *testing.T) {
 
 func TestAzureSQL_MarkSeen(t *testing.T) {
 	s, mock := newMock(t)
-	mock.ExpectExec(sqlSeenInsert).WithArgs("hn", "1").
+	mock.ExpectExec(sqlSeenInsert).WithArgs("b", "hn", "1").
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	if err := s.MarkSeen("hn", "1"); err != nil {
+	if err := s.MarkSeen("b", "hn", "1"); err != nil {
 		t.Fatalf("MarkSeen: %v", err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -129,7 +129,7 @@ func TestAzureSQL_Record(t *testing.T) {
 		WithArgs("sos-apm", "hn", "42", sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(sqlSeenInsert).
-		WithArgs("hn", "42").
+		WithArgs("sos-apm", "hn", "42").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
@@ -195,17 +195,17 @@ func TestAzureSQL_Live(t *testing.T) {
 	}
 	defer func() { _ = s.Close() }()
 
-	src, id := "test", "live-"+t.Name()
-	seen, err := s.Seen(src, id)
+	beacon, src, id := "live-beacon", "test", "live-"+t.Name()
+	seen, err := s.Seen(beacon, src, id)
 	if err != nil {
 		t.Fatalf("Seen: %v", err)
 	}
 	if !seen {
-		if err := s.MarkSeen(src, id); err != nil {
+		if err := s.MarkSeen(beacon, src, id); err != nil {
 			t.Fatalf("MarkSeen: %v", err)
 		}
 	}
-	if seen, err = s.Seen(src, id); err != nil || !seen {
+	if seen, err = s.Seen(beacon, src, id); err != nil || !seen {
 		t.Fatalf("Seen after MarkSeen = %v, %v; want true, nil", seen, err)
 	}
 

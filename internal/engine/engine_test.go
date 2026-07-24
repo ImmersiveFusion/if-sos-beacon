@@ -66,20 +66,20 @@ type fakeStore struct {
 
 func newFakeStore() *fakeStore { return &fakeStore{seen: map[string]bool{}} }
 
-func (s *fakeStore) key(source, id string) string { return source + ":" + id }
-func (s *fakeStore) Seen(source, id string) (bool, error) {
-	return s.seen[s.key(source, id)], s.seenErr
+func (s *fakeStore) key(beacon, source, id string) string { return beacon + ":" + source + ":" + id }
+func (s *fakeStore) Seen(beacon, source, id string) (bool, error) {
+	return s.seen[s.key(beacon, source, id)], s.seenErr
 }
 
-func (s *fakeStore) MarkSeen(source, id string) error {
-	s.marked = append(s.marked, s.key(source, id))
-	s.seen[s.key(source, id)] = true
+func (s *fakeStore) MarkSeen(beacon, source, id string) error {
+	s.marked = append(s.marked, s.key(beacon, source, id))
+	s.seen[s.key(beacon, source, id)] = true
 	return s.markErr
 }
 
 func (s *fakeStore) Record(f core.Finding) error {
 	s.recorded = append(s.recorded, f)
-	s.seen[s.key(f.Signal.Source, f.Signal.ID)] = true
+	s.seen[s.key(f.Beacon, f.Signal.Source, f.Signal.ID)] = true
 	return s.recordErr
 }
 
@@ -187,7 +187,7 @@ func TestRunBeacon_DecisionRouting(t *testing.T) {
 func TestRunBeacon_Gating(t *testing.T) {
 	t.Run("already seen skips classify", func(t *testing.T) {
 		store := newFakeStore()
-		store.seen["hn:1"] = true
+		store.seen["t:hn:1"] = true // key is beacon:source:id
 		clf := &fakeClassifier{verdict: core.Verdict{Bucket: "seeker", Fit: 0.9}}
 		deps := Deps{
 			Fetchers:   []core.Fetcher{&fakeFetcher{name: "hn", signals: []core.Signal{passingSignal()}}},
@@ -243,6 +243,68 @@ func TestRunBeacon_Gating(t *testing.T) {
 			t.Errorf("Errors=%d marked=%d recorded=%d, want 1/0/0", st.Errors, len(store.marked), len(store.recorded))
 		}
 	})
+}
+
+// prefilteredFetcher is a source that declares it already narrowed by keyword.
+type prefilteredFetcher struct {
+	name    string
+	signals []core.Signal
+}
+
+func (f *prefilteredFetcher) Name() string                                 { return f.name }
+func (f *prefilteredFetcher) Fetch(context.Context) ([]core.Signal, error) { return f.signals, nil }
+func (f *prefilteredFetcher) PrefiltersByKeyword() bool                    { return true }
+
+func TestRunBeacon_KeywordPrefilterSkipsFilter(t *testing.T) {
+	store := newFakeStore()
+	clf := &fakeClassifier{verdict: core.Verdict{Bucket: "seeker", Fit: 0.9}}
+	cfg := baseConfig()
+	cfg.Keywords = []string{"kubernetes"} // the signal's title lacks this word
+
+	// The signal would fail the keyword filter, but its source declares it was
+	// already keyword-queried, so the engine must classify it anyway.
+	sig := core.Signal{Source: "hn", ID: "9", Title: "a story with no kw", CreatedAt: time.Now()}
+	deps := Deps{
+		Fetchers:   []core.Fetcher{&prefilteredFetcher{name: "hn", signals: []core.Signal{sig}}},
+		Classifier: clf, Sink: &fakeSink{}, Deduper: store, Recorder: store,
+	}
+	st, _ := RunBeacon(context.Background(), cfg, deps, discardLogger())
+	if st.Filtered != 0 || clf.calls != 1 || st.Classified != 1 {
+		t.Errorf("Filtered=%d calls=%d classified=%d, want 0/1/1 (prefiltered source bypasses filter)", st.Filtered, clf.calls, st.Classified)
+	}
+}
+
+func TestRunBeacon_DedupeIsPerBeacon(t *testing.T) {
+	// One shared store, two beacons, the same (source, id). Beacon A marks it
+	// seen (filtered); beacon B must still see it as novel and classify it.
+	store := newFakeStore()
+	sig := core.Signal{Source: "lobsters", ID: "shared", Title: "off-topic for A", CreatedAt: time.Now()}
+
+	cfgA := baseConfig()
+	cfgA.Name = "beacon-a"
+	cfgA.Keywords = []string{"datadog"} // signal lacks it -> A filters + marks seen
+	depsA := Deps{
+		Fetchers:   []core.Fetcher{&fakeFetcher{name: "lobsters", signals: []core.Signal{sig}}},
+		Classifier: &fakeClassifier{}, Sink: &fakeSink{}, Deduper: store, Recorder: store,
+	}
+	if _, err := RunBeacon(context.Background(), cfgA, depsA, discardLogger()); err != nil {
+		t.Fatalf("beacon A: %v", err)
+	}
+
+	cfgB := baseConfig()
+	cfgB.Name = "beacon-b" // no keywords -> filter open, should classify
+	clfB := &fakeClassifier{verdict: core.Verdict{Bucket: "seeker", Fit: 0.9}}
+	depsB := Deps{
+		Fetchers:   []core.Fetcher{&fakeFetcher{name: "lobsters", signals: []core.Signal{sig}}},
+		Classifier: clfB, Sink: &fakeSink{}, Deduper: store, Recorder: store,
+	}
+	stB, err := RunBeacon(context.Background(), cfgB, depsB, discardLogger())
+	if err != nil {
+		t.Fatalf("beacon B: %v", err)
+	}
+	if stB.Seen != 0 || clfB.calls != 1 {
+		t.Errorf("beacon B Seen=%d calls=%d, want 0/1: A's mark must not starve B", stB.Seen, clfB.calls)
+	}
 }
 
 func TestRunBeacon_NilDepsRejected(t *testing.T) {
