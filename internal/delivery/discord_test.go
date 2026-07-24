@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
 )
@@ -87,6 +88,38 @@ func TestDeliver_StatusError(t *testing.T) {
 	d := NewDiscord(srv.URL)
 	if err := d.Deliver(context.Background(), sampleFinding()); err == nil {
 		t.Fatal("expected error on 400 status")
+	}
+}
+
+func TestDeliver_PacesPosts(t *testing.T) {
+	var mu sync.Mutex
+	var recv []time.Time
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		recv = append(recv, time.Now())
+		mu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	const spacing = 50 * time.Millisecond
+	d := newDiscordWithSpacing(srv.URL, spacing)
+	for i := 0; i < 3; i++ {
+		if err := d.Deliver(context.Background(), sampleFinding()); err != nil {
+			t.Fatalf("Deliver %d: %v", i, err)
+		}
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(recv) != 3 {
+		t.Fatalf("got %d posts, want 3", len(recv))
+	}
+	// The first post is immediate; each subsequent one is spaced. Allow slack.
+	for i := 1; i < len(recv); i++ {
+		if gap := recv[i].Sub(recv[i-1]); gap < spacing-10*time.Millisecond {
+			t.Errorf("post %d followed post %d by %v, want >= ~%v", i, i-1, gap, spacing)
+		}
 	}
 }
 

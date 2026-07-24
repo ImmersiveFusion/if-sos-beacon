@@ -13,22 +13,42 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
 )
 
-// Discord is a Sink that posts a finding as a Discord webhook embed.
+// defaultPostSpacing is the minimum gap between posts to one webhook. Discord
+// webhooks rate-limit around 30 requests/minute; ~2s spacing stays well under
+// that and turns a fruitful poll's clump of embeds into a steady trickle
+// instead of a burst.
+const defaultPostSpacing = 2 * time.Second
+
+// Discord is a Sink that posts a finding as a Discord webhook embed. It paces
+// its posts (minSpacing) so a poll that produces many findings does not dump
+// them all at once or trip the webhook rate limit.
 type Discord struct {
 	webhookURL string
 	client     *http.Client
+
+	minSpacing time.Duration
+	mu         sync.Mutex
+	lastPost   time.Time
 }
 
-// NewDiscord builds a Discord sink for one webhook URL.
+// NewDiscord builds a Discord sink for one webhook URL, with default pacing.
 func NewDiscord(webhookURL string) *Discord {
+	return newDiscordWithSpacing(webhookURL, defaultPostSpacing)
+}
+
+// newDiscordWithSpacing builds a Discord sink with an explicit post spacing.
+// Tests use a small (or zero) spacing to stay fast.
+func newDiscordWithSpacing(webhookURL string, spacing time.Duration) *Discord {
 	return &Discord{
 		webhookURL: webhookURL,
 		client:     &http.Client{Timeout: 20 * time.Second},
+		minSpacing: spacing,
 	}
 }
 
@@ -45,6 +65,9 @@ type discordEmbed struct {
 // Deliver posts one finding as an embed. The description is a compact pointer:
 // bucket, fit, summary, reasoning, age, points, comments, and a claim prompt.
 func (d *Discord) Deliver(ctx context.Context, f core.Finding) error {
+	if err := d.pace(ctx); err != nil {
+		return err
+	}
 	payload := discordPayload{
 		Embeds: []discordEmbed{{
 			Title:       embedTitle(f.Signal),
@@ -84,6 +107,34 @@ func redactURL(err error) error {
 		return fmt.Errorf("discord %s: %w", ue.Op, ue.Err)
 	}
 	return err
+}
+
+// pace blocks until at least minSpacing has elapsed since the previous post,
+// then records this post's time. It respects context cancellation while waiting.
+// A single sink is called sequentially by one beacon, so the lock is light; it
+// also makes the sink safe if that ever changes.
+func (d *Discord) pace(ctx context.Context) error {
+	d.mu.Lock()
+	var wait time.Duration
+	if d.minSpacing > 0 && !d.lastPost.IsZero() {
+		if elapsed := time.Since(d.lastPost); elapsed < d.minSpacing {
+			wait = d.minSpacing - elapsed
+		}
+	}
+	d.mu.Unlock()
+
+	if wait > 0 {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(wait):
+		}
+	}
+
+	d.mu.Lock()
+	d.lastPost = time.Now()
+	d.mu.Unlock()
+	return nil
 }
 
 func embedTitle(s core.Signal) string {

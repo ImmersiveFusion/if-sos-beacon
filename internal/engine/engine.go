@@ -28,6 +28,11 @@ type Deps struct {
 	Sink       core.Sink
 	Deduper    core.Deduper
 	Recorder   core.Recorder
+
+	// SourceSpacing, when > 0, inserts a pause between successive source fetches
+	// so a beacon with several sources does not fetch them all in one burst.
+	// Zero (the one-shot default) fetches back-to-back.
+	SourceSpacing time.Duration
 }
 
 // Stats summarizes one beacon run.
@@ -92,7 +97,15 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 
 	// --- fetch (over-collect from every source, sequentially) ---
 	var signals []core.Signal
-	for _, f := range deps.Fetchers {
+	for i, f := range deps.Fetchers {
+		// Spread the fetch phase so several sources do not all fire at once.
+		if i > 0 && deps.SourceSpacing > 0 {
+			select {
+			case <-ctx.Done():
+				return st, ctx.Err()
+			case <-time.After(deps.SourceSpacing):
+			}
+		}
 		fctx, fspan := tracer.Start(ctx, "source.fetch")
 		fspan.SetAttributes(attribute.String(telemetry.AttrSource, f.Name()))
 		got, err := f.Fetch(fctx)
@@ -138,9 +151,11 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 		}
 
 		// --- classify (LLM) ---
-		// One span per turn. The AI adapter enriches it with GenAI token
-		// metadata; here we record the pointer fields (source, post id) and, on
-		// return, the verdict's bucket/fit/reasoning summary. Never the content.
+		// One span per turn, created here as "signal.classify". The AI adapter
+		// enriches it with GenAI token metadata and renames it to the semconv
+		// `chat {model}` form; here we record the pointer fields (source, post
+		// id) and, on return, the verdict's bucket/fit/reasoning summary. Never
+		// the content.
 		st.Classified++
 		cctx, cspan := tracer.Start(ctx, "signal.classify")
 		cspan.SetAttributes(

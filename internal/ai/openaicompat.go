@@ -163,13 +163,16 @@ func (c *OpenAICompat) Classify(ctx context.Context, s core.Signal, bc core.Beac
 
 // recordGenAI annotates the active span with OTel GenAI semantic-convention
 // attributes: operation, system, request/response model, token usage, and the
-// finish reason. No prompt or completion content is recorded. When no span is
-// active, SpanFromContext returns a no-op span and this is a cheap no-op.
+// finish reason. No prompt or completion content is recorded. It also renames
+// the span to the semconv form `chat {model}` so LLM-observability tooling
+// recognizes the turn. When no span is active, SpanFromContext returns a no-op
+// span and this is a cheap no-op.
 func (c *OpenAICompat) recordGenAI(ctx context.Context, cr chatResponse) {
 	span := trace.SpanFromContext(ctx)
 	if !span.IsRecording() {
 		return
 	}
+	span.SetName("chat " + c.model)
 	span.SetAttributes(
 		attribute.String("gen_ai.operation.name", "chat"),
 		attribute.String("gen_ai.system", "openai"),

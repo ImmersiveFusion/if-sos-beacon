@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -248,6 +249,52 @@ func TestRunBeacon_NilDepsRejected(t *testing.T) {
 	_, err := RunBeacon(context.Background(), baseConfig(), Deps{}, discardLogger())
 	if err == nil {
 		t.Fatal("expected error for empty Deps")
+	}
+}
+
+// --- source spacing ---
+
+type timedFetcher struct {
+	name string
+	mu   *sync.Mutex
+	at   *[]time.Time
+}
+
+func (f *timedFetcher) Name() string { return f.name }
+func (f *timedFetcher) Fetch(context.Context) ([]core.Signal, error) {
+	f.mu.Lock()
+	*f.at = append(*f.at, time.Now())
+	f.mu.Unlock()
+	return nil, nil
+}
+
+func TestRunBeacon_SourceSpacing(t *testing.T) {
+	var mu sync.Mutex
+	var at []time.Time
+	store := newFakeStore()
+	const spacing = 30 * time.Millisecond
+	deps := Deps{
+		Fetchers: []core.Fetcher{
+			&timedFetcher{name: "a", mu: &mu, at: &at},
+			&timedFetcher{name: "b", mu: &mu, at: &at},
+		},
+		Classifier:    &fakeClassifier{},
+		Sink:          &fakeSink{},
+		Deduper:       store,
+		Recorder:      store,
+		SourceSpacing: spacing,
+	}
+	if _, err := RunBeacon(context.Background(), baseConfig(), deps, discardLogger()); err != nil {
+		t.Fatalf("RunBeacon: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(at) != 2 {
+		t.Fatalf("got %d fetches, want 2", len(at))
+	}
+	if gap := at[1].Sub(at[0]); gap < spacing-5*time.Millisecond {
+		t.Errorf("sources fetched %v apart, want >= ~%v (spaced, not bursted)", gap, spacing)
 	}
 }
 

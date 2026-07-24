@@ -132,6 +132,10 @@ func TestClassify_RecordsGenAIUsageOnSpan(t *testing.T) {
 	if len(spans) != 1 {
 		t.Fatalf("got %d spans, want 1", len(spans))
 	}
+	// The adapter renames the turn span to the semconv `chat {model}` form.
+	if spans[0].Name != "chat gpt-x" {
+		t.Errorf("span name = %q, want %q", spans[0].Name, "chat gpt-x")
+	}
 	attrs := map[string]attribute.Value{}
 	for _, kv := range spans[0].Attributes {
 		attrs[string(kv.Key)] = kv.Value
