@@ -1,0 +1,27 @@
+# Keep the build context small and secret-free. NOTE: do not add broad globs
+# like *.md or *.json here: internal/prompts/{classifier.prompt.md,
+# classifier.schema.json} and internal/store/schema.sql are //go:embed'ed and
+# must reach the build. Exclude specific things only.
+
+# VCS + CI + editor
+.git
+.github
+.claude
+.idea
+.vscode
+
+# Build output
+dist/
+/sos-beacon
+/sos-beacon.exe
+*.exe
+
+# Local runtime state + operator config (may hold private coordinates; D12)
+config.yaml
+sos-state.json
+.sos-state-*.tmp
+
+# Test artifacts
+coverage.txt
+*.test
+*.out
