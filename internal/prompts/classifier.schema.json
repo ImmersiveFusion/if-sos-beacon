@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Verdict",
+  "description": "A POINTER, never prose intended for posting. The classifier sorts one signal into the beacon's buckets and scores its topical fit.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["bucket", "scores", "fit", "summary", "reasoning"],
+  "properties": {
+    "bucket": {
+      "type": "string",
+      "description": "The single best-matching bucket name from the beacon's bucket list, or \"noise\" if none fit."
+    },
+    "scores": {
+      "type": "object",
+      "description": "Per-bucket confidence, keyed by bucket name, each 0..1.",
+      "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 }
+    },
+    "fit": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Topical relevance to the beacon's context, 0..1. Drives delivery thresholds."
+    },
+    "summary": {
+      "type": "string",
+      "description": "One line describing what the signal is, for the embed only. Never a drafted reply."
+    },
+    "reasoning": {
+      "type": "string",
+      "description": "One or two sentences of glass-box justification for the bucket and fit."
+    }
+  }
+}

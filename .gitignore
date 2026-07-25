@@ -1,0 +1,27 @@
+# Build output. Anchored to the repo root with a leading slash so the pattern
+# matches only the built binary, NOT the cmd/sos-beacon/ source directory (a
+# bare `sos-beacon` pattern would ignore any path component of that name).
+/sos-beacon
+/sos-beacon.exe
+dist/
+
+# Local runtime state + config (config.example.yaml is the template that ships)
+config.yaml
+sos-state.json
+.sos-state-*.tmp
+
+# Test
+*.test
+*.out
+coverage.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

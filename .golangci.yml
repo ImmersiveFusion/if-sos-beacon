@@ -1,0 +1,44 @@
+# golangci-lint v2 configuration. Quality gate ADDITIVE to tracegen parity:
+# release/build/container stay byte-matched to tracegen; this adds static
+# analysis on top. Run locally with `golangci-lint run` (and `golangci-lint fmt`
+# to apply the gofumpt formatter).
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  # errcheck, govet, ineffassign, staticcheck, and unused are enabled by default
+  # in v2; listed here for intent. revive, misspell, and gosec are added.
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - revive
+    - misspell
+    - gosec
+  settings:
+    misspell:
+      locale: US
+    revive:
+      rules:
+        # Require doc comments on every exported symbol (house standard).
+        - name: exported
+  exclusions:
+    # Keep the standard-library error-handling exclusions (e.g. unchecked
+    # Body.Close, os.Remove in cleanup paths); everything else stays strict.
+    presets:
+      - std-error-handling
+    rules:
+      # Tests exercise adapters and fakes; relax gosec + dup-heavy checks there.
+      - path: _test\.go
+        linters:
+          - gosec
+
+formatters:
+  # gofumpt is a formatter in v2: `golangci-lint run` reports diffs, and CI also
+  # runs `gofumpt -l` directly as a fail-on-diff gate.
+  enable:
+    - gofumpt
