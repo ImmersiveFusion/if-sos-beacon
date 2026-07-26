@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -26,6 +27,11 @@ import (
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/store"
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/telemetry"
 )
+
+// version is stamped at release time by goreleaser via -ldflags "-X main.version=...".
+// Local and dev builds report "dev". It appears in the startup banner so a running
+// container announces exactly which image it is.
+var version = "dev"
 
 func main() {
 	configPath := flag.String("config", "config.yaml", "path to the beacon config file")
@@ -50,6 +56,15 @@ func run(ctx context.Context, configPath string, globalInterval time.Duration, l
 	if err != nil {
 		return err
 	}
+
+	// Startup banner: printed regardless of log level (same as tracegen's bannerf), so a
+	// running container always announces itself even at SOS_BEACON_LOG_LEVEL=error.
+	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	if endpoint == "" {
+		endpoint = "none"
+	}
+	fmt.Printf("sos-beacon %s starting: beacons=%d store=%s otlp=%s interval=%s\n",
+		version, len(cfg.Beacons), cfg.Store.Type, endpoint, globalInterval)
 
 	// --- OTel tracing (no-op unless an OTLP endpoint is configured via env) ---
 	shutdownTracing, err := telemetry.Init(ctx)
