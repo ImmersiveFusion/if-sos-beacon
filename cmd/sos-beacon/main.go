@@ -57,13 +57,13 @@ func run(ctx context.Context, configPath string, globalInterval time.Duration, l
 		return err
 	}
 
-	// Startup banner: printed regardless of log level (same as tracegen's bannerf), so a
+	// Startup banner: printed regardless of log level (same pattern as tracegen), so a
 	// running container always announces itself even at SOS_BEACON_LOG_LEVEL=error.
 	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 	if endpoint == "" {
 		endpoint = "none"
 	}
-	fmt.Printf("sos-beacon %s starting: beacons=%d store=%s otlp=%s interval=%s\n",
+	bannerf("sos-beacon %s starting: beacons=%d store=%s otlp=%s interval=%s\n",
 		version, len(cfg.Beacons), cfg.Store.Type, endpoint, globalInterval)
 
 	// --- OTel tracing (no-op unless an OTLP endpoint is configured via env) ---
@@ -294,3 +294,9 @@ func resolveLevel(flagVal string) slog.Level {
 func newLogger(level slog.Level) *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 }
+
+// bannerf writes operator-orientation output to stderr regardless of log level, so a
+// running container always announces itself even at SOS_BEACON_LOG_LEVEL=error. It is
+// not a leveled log (slog has no "always" severity), and it shares stderr with the slog
+// stream so the two stay ordered. tracegen uses the same pattern.
+func bannerf(format string, a ...any) { fmt.Fprintf(os.Stderr, format, a...) }
