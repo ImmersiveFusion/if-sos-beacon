@@ -23,6 +23,7 @@ import (
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/delivery"
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/engine"
+	"github.com/ImmersiveFusion/if-sos-beacon/internal/health"
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/sources"
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/store"
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/telemetry"
@@ -37,6 +38,7 @@ func main() {
 	configPath := flag.String("config", "config.yaml", "path to the beacon config file")
 	logLevel := flag.String("log-level", "", "log verbosity: debug, info, warn, error (env SOS_BEACON_LOG_LEVEL)")
 	interval := flag.Duration("interval", 0, "container loop mode: poll every interval (e.g. 10m); 0 = one-shot. Per-beacon poll_interval overrides this.")
+	healthAddr := flag.String("health-addr", ":8080", "container loop mode: address for the /readyz and /healthz HTTP endpoints; empty disables")
 	flag.Parse()
 
 	log := newLogger(resolveLevel(*logLevel))
@@ -45,13 +47,13 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := run(ctx, *configPath, *interval, log); err != nil {
+	if err := run(ctx, *configPath, *interval, *healthAddr, log); err != nil {
 		log.Error("fatal", "err", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, configPath string, globalInterval time.Duration, log *slog.Logger) error {
+func run(ctx context.Context, configPath string, globalInterval time.Duration, healthAddr string, log *slog.Logger) error {
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return err
@@ -94,12 +96,37 @@ func run(ctx context.Context, configPath string, globalInterval time.Duration, l
 	}
 
 	if loopMode(cfg, globalInterval) {
-		return runLoop(ctx, cfg, classifier, st, globalInterval, log)
+		// Liveness: a hung poll must be restarted, but a beacon legitimately sleeps
+		// up to its interval between polls, so the staleness window is 2x the longest
+		// effective interval. Startup counts as the first beat (see health.New).
+		staleAfter := 2 * maxPollInterval(cfg, globalInterval)
+		hm := health.New(staleAfter)
+		if healthAddr != "" {
+			hm.Serve(healthAddr, func(err error) { log.Error("health server stopped", "err", err) })
+			log.Info("health endpoints serving", "addr", healthAddr, "stale_after", staleAfter.String())
+		}
+		return runLoop(ctx, cfg, classifier, st, globalInterval, hm, log)
 	}
 	for _, b := range cfg.Beacons {
 		runBeacon(ctx, b, classifier, st, 0, log) // one-shot: no source spacing
 	}
 	return nil
+}
+
+// maxPollInterval returns the largest effective poll interval across beacons, used
+// to size the liveness staleness window. Falls back to a minute if nothing resolves
+// (should not happen in loop mode, where at least one interval is > 0).
+func maxPollInterval(cfg *config.Config, globalInterval time.Duration) time.Duration {
+	max := globalInterval
+	for _, b := range cfg.Beacons {
+		if iv, err := resolveInterval(b, globalInterval); err == nil && iv > max {
+			max = iv
+		}
+	}
+	if max <= 0 {
+		max = time.Minute
+	}
+	return max
 }
 
 // loopMode is true when any interval is configured (the global -interval flag or
@@ -137,7 +164,7 @@ const loopSourceSpacing = 1 * time.Second
 // runLoop polls every beacon on its own interval until ctx is canceled, then
 // waits for in-flight polls to finish before returning. Beacons are phase-
 // staggered so equal-interval beacons do not poll in lockstep (anti-burst).
-func runLoop(ctx context.Context, cfg *config.Config, classifier core.Classifier, st core.Store, globalInterval time.Duration, log *slog.Logger) error {
+func runLoop(ctx context.Context, cfg *config.Config, classifier core.Classifier, st core.Store, globalInterval time.Duration, hm *health.Monitor, log *slog.Logger) error {
 	var wg sync.WaitGroup
 	n := len(cfg.Beacons)
 	for i, b := range cfg.Beacons {
@@ -158,9 +185,10 @@ func runLoop(ctx context.Context, cfg *config.Config, classifier core.Classifier
 		wg.Add(1)
 		go func(b config.BeaconConfig, iv, stagger time.Duration) {
 			defer wg.Done()
-			loopBeacon(ctx, b, classifier, st, iv, stagger, log)
+			loopBeacon(ctx, b, classifier, st, iv, stagger, hm, log)
 		}(b, iv, stagger)
 	}
+	hm.Ready() // startup complete: /readyz now reports 200
 	log.Info("container loop mode; polling until SIGTERM")
 	wg.Wait()
 	log.Info("all beacon loops stopped")
@@ -188,7 +216,7 @@ func coverageGap(interval, maxAge time.Duration) bool {
 // canceled. Each poll uses a background context so a shutdown signal mid-poll
 // lets the current poll finish gracefully (bounded by the adapters' own HTTP
 // timeouts) rather than tearing it in half.
-func loopBeacon(ctx context.Context, b config.BeaconConfig, classifier core.Classifier, st core.Store, interval, stagger time.Duration, log *slog.Logger) {
+func loopBeacon(ctx context.Context, b config.BeaconConfig, classifier core.Classifier, st core.Store, interval, stagger time.Duration, hm *health.Monitor, log *slog.Logger) {
 	// Phase offset: delay this beacon's first poll so beacons do not all fire at
 	// startup and equal-interval beacons stay spread across the window.
 	if stagger > 0 {
@@ -202,6 +230,7 @@ func loopBeacon(ctx context.Context, b config.BeaconConfig, classifier core.Clas
 		return
 	}
 	runBeacon(context.Background(), b, classifier, st, loopSourceSpacing, log)
+	hm.Beat() // forward progress: keeps /healthz green
 
 	if interval <= 0 {
 		return // no interval for this beacon: a single poll in loop mode
@@ -215,6 +244,7 @@ func loopBeacon(ctx context.Context, b config.BeaconConfig, classifier core.Clas
 			return
 		case <-t.C:
 			runBeacon(context.Background(), b, classifier, st, loopSourceSpacing, log)
+			hm.Beat()
 		}
 	}
 }
