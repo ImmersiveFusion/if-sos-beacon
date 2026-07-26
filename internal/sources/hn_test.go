@@ -62,6 +62,9 @@ func TestHNFetch_MappingAndDedup(t *testing.T) {
 	if first.URL != "https://ex.com/a" {
 		t.Errorf("first URL = %q, want the story url", first.URL)
 	}
+	if first.Permalink != "https://news.ycombinator.com/item?id=1" {
+		t.Errorf("first Permalink = %q, want the discussion thread", first.Permalink)
+	}
 	if first.Score != 42 || first.NumComments != 7 {
 		t.Errorf("score/comments = %d/%d, want 42/7", first.Score, first.NumComments)
 	}
@@ -70,9 +73,13 @@ func TestHNFetch_MappingAndDedup(t *testing.T) {
 	}
 
 	second := got[1]
-	wantLink := "https://news.ycombinator.com/item?id=2"
-	if second.URL != wantLink {
-		t.Errorf("empty-url signal link = %q, want %q", second.URL, wantLink)
+	// Ask HN (no external url): URL stays empty, Permalink is the discussion thread.
+	if second.URL != "" {
+		t.Errorf("empty-url signal URL = %q, want empty (no external link)", second.URL)
+	}
+	wantThread := "https://news.ycombinator.com/item?id=2"
+	if second.Permalink != wantThread {
+		t.Errorf("empty-url signal Permalink = %q, want %q", second.Permalink, wantThread)
 	}
 }
 

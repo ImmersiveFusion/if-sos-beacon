@@ -49,8 +49,12 @@ func TestLobstersFetch_Mapping(t *testing.T) {
 	if b.Author != "bob" {
 		t.Errorf("B author = %q, want bob (object form of submitter_user)", b.Author)
 	}
-	if b.URL != "https://lobste.rs/s/bbb" {
-		t.Errorf("B url = %q, want comments_url fallback", b.URL)
+	// Text post (no external url): URL stays empty, Permalink is the comments thread.
+	if b.URL != "" {
+		t.Errorf("B URL = %q, want empty (no external link)", b.URL)
+	}
+	if b.Permalink != "https://lobste.rs/s/bbb" {
+		t.Errorf("B Permalink = %q, want comments_url", b.Permalink)
 	}
 }
 

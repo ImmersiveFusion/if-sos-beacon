@@ -18,8 +18,12 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 ARG TARGETOS TARGETARCH
+# VERSION is stamped into the banner via -X main.version. release.yml passes the
+# git tag; local `docker build` defaults to "dev". Keep in sync with .goreleaser.yml
+# (which stamps the tarball binaries the same way).
+ARG VERSION=dev
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -ldflags="-s -w" -o /out/sos-beacon ./cmd/sos-beacon
+    go build -ldflags="-s -w -X main.version=${VERSION}" -o /out/sos-beacon ./cmd/sos-beacon
 
 # distroless/static: no shell, CA certs included (for HTTPS egress to HN /
 # Discord / the LLM API), runs as non-root.

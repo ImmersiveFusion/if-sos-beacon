@@ -71,7 +71,7 @@ func (d *Discord) Deliver(ctx context.Context, f core.Finding) error {
 	payload := discordPayload{
 		Embeds: []discordEmbed{{
 			Title:       embedTitle(f.Signal),
-			URL:         f.Signal.URL,
+			URL:         threadLink(f.Signal),
 			Description: buildDescription(f),
 		}},
 	}
@@ -144,6 +144,17 @@ func embedTitle(s core.Signal) string {
 	return s.Source + ":" + s.ID
 }
 
+// threadLink is the discussion thread a human opens to reply: the source
+// Permalink (HN item, Lobsters comments), never the submitted external URL (the
+// vendor page). Falls back to URL only if a source ever leaves Permalink empty,
+// so the embed is never a dead link.
+func threadLink(s core.Signal) string {
+	if s.Permalink != "" {
+		return s.Permalink
+	}
+	return s.URL
+}
+
 func buildDescription(f core.Finding) string {
 	v := f.Verdict
 	parts := []string{
@@ -160,7 +171,7 @@ func buildDescription(f core.Finding) string {
 		age(f.Signal),
 		fmt.Sprintf("%d pts", f.Signal.Score),
 		fmt.Sprintf("%d comments", f.Signal.NumComments),
-		"🙋 to claim",
+		"🙋 to claim · ❌ if spam or not worth it",
 	)
 	return strings.Join(parts, " · ")
 }

@@ -16,7 +16,8 @@ type Signal struct {
 	Source      string
 	ID          string // source-native id; dedupe key with Source
 	Title       string
-	URL         string
+	URL         string // submitted/external link (may be empty for text posts); reference only
+	Permalink   string // discussion thread where a human replies; the actionable link the beacon posts
 	Author      string
 	Body        string
 	TopComments []string

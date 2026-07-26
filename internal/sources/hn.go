@@ -82,15 +82,12 @@ func (h *HN) Fetch(ctx context.Context) ([]core.Signal, error) {
 			}
 			seen[hit.ObjectID] = true
 
-			link := hit.URL
-			if link == "" {
-				link = "https://news.ycombinator.com/item?id=" + hit.ObjectID
-			}
 			out = append(out, core.Signal{
 				Source:      h.Name(),
 				ID:          hit.ObjectID,
 				Title:       hit.Title,
-				URL:         link,
+				URL:         hit.URL,                                                // external link (empty for Ask HN); reference only
+				Permalink:   "https://news.ycombinator.com/item?id=" + hit.ObjectID, // the thread to reply in
 				Author:      hit.Author,
 				Body:        hit.StoryText,
 				Score:       hit.Points,

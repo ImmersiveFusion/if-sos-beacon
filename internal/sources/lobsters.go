@@ -100,10 +100,6 @@ func (l *Lobsters) Fetch(ctx context.Context) ([]core.Signal, error) {
 		if st.ShortID == "" {
 			continue
 		}
-		link := st.URL
-		if link == "" {
-			link = st.CommentsURL
-		}
 		var created time.Time
 		if t, perr := time.Parse(time.RFC3339, st.CreatedAt); perr == nil {
 			created = t.UTC()
@@ -112,7 +108,8 @@ func (l *Lobsters) Fetch(ctx context.Context) ([]core.Signal, error) {
 			Source:      l.Name(),
 			ID:          st.ShortID,
 			Title:       st.Title,
-			URL:         link,
+			URL:         st.URL,         // external link (empty for text posts); reference only
+			Permalink:   st.CommentsURL, // the thread to reply in
 			Author:      st.SubmitterRaw.Username,
 			Body:        st.Description,
 			Score:       st.Score,
