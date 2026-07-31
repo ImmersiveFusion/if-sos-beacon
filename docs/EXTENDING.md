@@ -75,15 +75,38 @@ Then register it in [`internal/sources/registry.go`](../internal/sources/registr
 
 ```go
 var registry = map[string]Constructor{
-	"hn":       func(b config.BeaconConfig) core.Fetcher { return NewHN(b.Keywords) },
-	"lobsters": func(b config.BeaconConfig) core.Fetcher { return NewLobsters() },
-	"devto":    func(b config.BeaconConfig) core.Fetcher { return NewDevTo(b.DevTo.Tags) }, // <- one line
+	"hn": func(b config.BeaconConfig) (core.Fetcher, error) {
+		return NewHN(b.Keywords), nil
+	},
+	"lobsters": func(b config.BeaconConfig) (core.Fetcher, error) {
+		return NewLobsters(b.Lobsters.Tags), nil
+	},
+	"devto": func(b config.BeaconConfig) (core.Fetcher, error) { // <- one entry
+		return NewDevTo(b.DevTo.Tags), nil
+	},
 }
 ```
 
+A constructor returns an error so a source with prerequisites can refuse at
+wiring time instead of failing identically on every poll. Reddit does this: no
+subreddits, or empty credentials in the environment, and the beacon logs one
+actionable "skipping source" line naming the env var to set. If your source has
+no prerequisites, return `nil`.
+
 If your source needs its own config (tags, instances, subreddits), add a typed
-block to `config.BeaconConfig`, following the existing `reddit:` field. A beacon
-opts in by listing the name in its `sources:` list.
+block to `config.BeaconConfig`, following the existing `reddit:` and `lobsters:`
+fields. A beacon opts in by listing the name in its `sources:` list.
+
+Two details worth copying from the existing sources:
+
+- **Implement `core.KeywordPrefilter`** (returning true) if your API narrows by
+  keyword server-side, like HN and Reddit. The engine then skips the client-side
+  keyword gate for your signals, so a hit that matched in the body rather than
+  the title is not thrown away.
+- **Populate `Signal.Tags`** with whatever the platform uses for topic taxonomy
+  (Lobsters tags, a subreddit, dev.to tags). Tags feed both the pre-filter and
+  the classifier prompt, and on link-heavy platforms they carry more topical
+  signal than the post text does.
 
 ---
 

@@ -41,6 +41,8 @@ const (
 	sqlFindingUpsert = `UPDATE finding SET data = @p4 WHERE beacon = @p1 AND source = @p2 AND id = @p3; IF @@ROWCOUNT = 0 INSERT INTO finding (beacon, source, id, data) VALUES (@p1, @p2, @p3, @p4)`
 	sqlPendingSelect = `SELECT data FROM finding WHERE beacon = @p1`
 	sqlClaimUpsert   = `UPDATE claim SET claimant = @p2, ts = SYSUTCDATETIME() WHERE finding_id = @p1; IF @@ROWCOUNT = 0 INSERT INTO claim (finding_id, claimant) VALUES (@p1, @p2)`
+	sqlPurgeSeen     = `DELETE FROM seen WHERE source = @p1`
+	sqlPurgeFinding  = `DELETE FROM finding WHERE source = @p1`
 )
 
 // AzureSQL is a Store backed by Azure SQL / SQL Server via the pure-Go
@@ -194,6 +196,42 @@ func (s *AzureSQL) PendingDigest(beacon string) ([]core.Finding, error) {
 		return nil, fmt.Errorf("azuresql: iterate findings: %w", err)
 	}
 	return out, nil
+}
+
+// PurgeSource deletes every dedupe row and recorded finding that came from one
+// source, across all beacons, and reports how many rows went (core.Purger).
+//
+// Both deletes run in one transaction: a purge that dropped the findings but
+// left the dedupe rows (or the reverse) is a worse state than either doing it or
+// not, and the reason this path exists at all is a revocation clock.
+//
+// The claim table is keyed by an opaque finding id, so it is not source-mappable
+// today. Nothing writes it yet, and it holds only a claimant's own name, never
+// fetched content. The claim bot must key by (source, id) so this can clear it.
+func (s *AzureSQL) PurgeSource(source string) (int, error) {
+	ctx, cancel := s.opCtx()
+	defer cancel()
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("azuresql: purge begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }() // no-op once committed
+
+	total := 0
+	for _, stmt := range []string{sqlPurgeFinding, sqlPurgeSeen} {
+		res, execErr := tx.ExecContext(ctx, stmt, source)
+		if execErr != nil {
+			return 0, fmt.Errorf("azuresql: purge %q: %w", source, execErr)
+		}
+		if n, rowsErr := res.RowsAffected(); rowsErr == nil {
+			total += int(n)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("azuresql: purge commit: %w", err)
+	}
+	return total, nil
 }
 
 // Close releases the underlying connection pool.

@@ -79,9 +79,15 @@ type chatResponse struct {
 }
 
 // userPayload is the compact JSON the model classifies. Only surfaced fields.
+//
+// Tags are included because on some platforms they carry more topical signal
+// than the text does: a Lobsters link post is usually a bare headline with an
+// empty body, and its curated tags (performance, devops) are what say what the
+// post is actually about. On Reddit the subreddit plays the same role.
 type userPayload struct {
 	Title       string   `json:"title"`
 	Body        string   `json:"body,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
 	TopComments []string `json:"top_comments,omitempty"`
 	Source      string   `json:"source"`
 }
@@ -93,6 +99,7 @@ func (c *OpenAICompat) Classify(ctx context.Context, s core.Signal, bc core.Beac
 	up := userPayload{
 		Title:       s.Title,
 		Body:        s.Body,
+		Tags:        s.Tags,
 		TopComments: s.TopComments,
 		Source:      s.Source,
 	}

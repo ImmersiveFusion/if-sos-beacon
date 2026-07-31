@@ -2,9 +2,13 @@ package telemetry
 
 import (
 	"context"
+	"log/slog"
 	"testing"
+	"time"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
@@ -98,7 +102,7 @@ func TestInit_NoopWithoutEndpoint(t *testing.T) {
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
 	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "")
 
-	shutdown, err := Init(context.Background())
+	shutdown, err := Init(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("Init: %v", err)
 	}
@@ -111,4 +115,56 @@ func TestInit_NoopWithoutEndpoint(t *testing.T) {
 	// Tracer must be usable regardless (no-op tracer).
 	_, span := Tracer().Start(context.Background(), "x")
 	span.End()
+}
+
+// TestNewResource_NoSchemaConflict is the regression test for the bug that left
+// every OTLP-configured deployment exporting nothing: resource.Default() carries
+// the SDK's own semconv schema URL, and merging a resource stamped with a
+// DIFFERENT schema URL returns ErrSchemaURLConflict, which Init used to return,
+// leaving the global no-op provider in place. The merge must stay error-free
+// across SDK bumps, and service.name must survive it.
+func TestNewResource_NoSchemaConflict(t *testing.T) {
+	res := newResource()
+	if res == nil {
+		t.Fatal("newResource returned nil")
+	}
+	var name string
+	for _, kv := range res.Attributes() {
+		if string(kv.Key) == "service.name" {
+			name = kv.Value.AsString()
+		}
+	}
+	if name != serviceName {
+		t.Errorf("service.name = %q, want %q", name, serviceName)
+	}
+	// The SDK's schema URL must be preserved, not blanked by a conflict.
+	if res.SchemaURL() == "" {
+		t.Error("merged resource has an empty schema URL (schema conflict blanked it)")
+	}
+	if res.SchemaURL() != resource.Default().SchemaURL() {
+		t.Errorf("schema URL = %q, want the SDK default %q", res.SchemaURL(), resource.Default().SchemaURL())
+	}
+}
+
+// TestInit_InstallsSDKProviderWithEndpoint asserts the whole point of Init: with
+// an OTLP endpoint configured, the installed global provider must be a real SDK
+// provider, not the no-op passthrough. The endpoint is unroutable on purpose:
+// the gRPC exporter connects lazily, so this needs no network.
+func TestInit_InstallsSDKProviderWithEndpoint(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://otlp.invalid.example:443")
+
+	shutdown, err := Init(context.Background(), slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatalf("Init with an endpoint configured must succeed, got: %v", err)
+	}
+	t.Cleanup(func() {
+		sctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = shutdown(sctx)
+	})
+
+	tp := otel.GetTracerProvider()
+	if _, ok := tp.(*sdktrace.TracerProvider); !ok {
+		t.Fatalf("global tracer provider is %T, want *sdktrace.TracerProvider (no spans are exported otherwise)", tp)
+	}
 }

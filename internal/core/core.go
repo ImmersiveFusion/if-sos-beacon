@@ -20,12 +20,25 @@ type Signal struct {
 	Permalink   string // discussion thread where a human replies; the actionable link the beacon posts
 	Author      string
 	Body        string
+	Tags        []string // source-native topic tags where the platform has them (Lobsters, dev.to, Stack Exchange); nil elsewhere
 	TopComments []string
 	Score       int
 	NumComments int
 	CreatedAt   time.Time // freshness matters: HN dead 6-12h, Reddit 24-48h
 	FetchedAt   time.Time
 	Raw         json.RawMessage
+
+	// Prenarrowed marks a signal the SOURCE already narrowed to the beacon's
+	// topic, so the engine skips the client-side keyword gate for it.
+	//
+	// This is per signal, not per fetcher (see KeywordPrefilter), because a
+	// source can return both kinds in one fetch: Lobsters polls the global
+	// newest feed (a firehose, gate it) and the beacon's own tag-scoped feeds
+	// (the operator already declared those tags on-topic, do not gate them).
+	// Without this, the only way to let tag-scoped results through would be to
+	// list the tag names as `keywords`, which would also spray them at the
+	// keyword-searching sources as extra queries.
+	Prenarrowed bool
 }
 
 // Bucket is a user-defined intent category for one beacon. Buckets are data,
@@ -116,11 +129,28 @@ type Ledger interface {
 	PendingDigest(beacon string) ([]Finding, error)
 }
 
+// Purger deletes everything the store holds that came from one source, across
+// every beacon, and reports how many rows went.
+//
+// This exists because some platforms make deletion a term of access rather than
+// a courtesy: Reddit's Data API Terms S6 lets Reddit revoke access at any time
+// without notice, and S3.2/S6 then require deleting stored content and anything
+// derived from it. A store that commingles dedupe rows, verdicts and the ledger
+// across sources turns that into hand-written SQL under time pressure. One
+// source-scoped delete path, built alongside the fetcher, keeps it a command.
+//
+// Purging is deliberately whole-source rather than per-post: revocation is not
+// selective, and a partial purge is the failure mode worth designing out.
+type Purger interface {
+	PurgeSource(source string) (int, error)
+}
+
 // Store (Persistence port) is the full persistence contract: dedupe set, claim
 // ledger, digest accumulator, and a Close for adapters that hold resources.
 type Store interface {
 	Deduper
 	Recorder
 	Ledger
+	Purger
 	io.Closer
 }

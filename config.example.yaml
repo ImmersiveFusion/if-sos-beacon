@@ -1,21 +1,29 @@
-# sos-beacon example config (Phase 0: one-shot, HN source, openai-compatible AI,
-# Discord sink, file store). Copy to config.yaml and edit.
+# sos-beacon example config (one-shot, openai-compatible AI, Discord sink, file
+# store). Copy to config.yaml and edit.
 #
 # Secrets never live in this file: every credential is named as an env var here
 # and read from the environment at runtime.
 #
-#   export OAI_KEY=...            # your LLM API key
-#   export OAI_BASE_URL=...       # e.g. https://api.openai.com/v1 or your Azure OpenAI base
-#   export SOS_APM_WEBHOOK=...    # a Discord channel webhook URL
+#   export OAI_KEY=...              # your LLM API key
+#   export OAI_BASE_URL=...         # e.g. https://api.openai.com/v1 or your Azure OpenAI base
+#   export SOS_APM_WEBHOOK=...      # a Discord channel webhook URL
 #   export SOS_AI_WEBHOOK=...
+#   export REDDIT_CLIENT_ID=...     # only if a beacon lists the reddit source
+#   export REDDIT_CLIENT_SECRET=...
 #   ./sos-beacon -config config.yaml
 #
-# Phase 0 notes:
-# - `keywords` drives the HN query (one search per keyword) and the cheap
-#   pre-filter. The full boolean `filter` grammar (AND/OR/NOT) arrives in Phase 1.
-# - Phase 0 ships two real sources: `hn` (queried per keyword) and `lobsters`
-#   (an unfiltered newest-stories firehose narrowed by the keyword pre-filter).
-#   More sources (reddit, bluesky, mastodon, and so on) arrive in Phase 1.
+# Notes:
+# - `keywords` drives the server-side searches (HN and Reddit query once per
+#   keyword) and the cheap client-side pre-filter for firehose sources. The full
+#   boolean `filter` grammar (AND/OR/NOT) arrives in Phase 1.
+# - The three sources differ in how they narrow, which is what you tune:
+#     hn        keyword search per keyword, no auth
+#     reddit    keyword search per keyword across a multireddit, app-only OAuth
+#     lobsters  no keyword search API exists, so it fetches the newest feed plus
+#               any tag-scoped feeds you name and the pre-filter does the rest
+# - Lobsters posts are mostly bare links with an empty body, so their TAGS carry
+#   the topicality. Put the tag names in `keywords` too if you want tag
+#   membership alone to pass the pre-filter (the classifier sees tags either way).
 # - For Azure OpenAI, set `api_version` and point `base_url_env` at the deployment
 #   base; the adapter then uses the api-key header instead of Bearer auth.
 
@@ -50,7 +58,22 @@ beacons:
   - name: sos-apm
     mode: dispatch
     sources: [hn, lobsters]
-    keywords: [datadog, "new relic", observability, APM]
+    # Reddit is OFF by default and deliberately not in `sources` above. Read
+    # SECURITY.md / the README section on Reddit before you enable it: Reddit's
+    # Developer Terms restrict Data API access by a business, so whether you may
+    # run it depends on who you are, not on this config. Immersive Fusion does
+    # not run this source. If you are entitled to, register ONE "web app" (never
+    # a "script" app: that type means personal use, and Data API Terms S2.8 bars
+    # misrepresenting your OAuth identity), then add `reddit` to `sources` and:
+    #
+    # reddit:
+    #   subreddits: [devops, sre, kubernetes, ExperiencedDevs, selfhosted]
+    #   client_id_env: REDDIT_CLIENT_ID        # env var NAMES; these are the defaults
+    #   client_secret_env: REDDIT_CLIENT_SECRET
+    # Lobsters: tag-scoped feeds polled alongside the global newest feed.
+    lobsters:
+      tags: [devops, performance, practices, debugging, distributed]
+    keywords: [datadog, "new relic", observability, APM, devops, performance]
     filter: '(datadog OR "new relic" OR observability OR APM) AND NOT (hiring OR job)'
     context: |
       IAPM is 3D/VR spatial observability APM on OpenTelemetry. Incumbents: Datadog,

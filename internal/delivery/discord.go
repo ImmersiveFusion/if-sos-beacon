@@ -25,6 +25,11 @@ import (
 // instead of a burst.
 const defaultPostSpacing = 2 * time.Second
 
+// discordTitleLimit is Discord's hard cap on an embed title. Exceed it and the
+// whole webhook post is rejected, not truncated for you. Sink-specific, so it
+// stays here; the shared source labels and reaction prompts live in labels.go.
+const discordTitleLimit = 256
+
 // Discord is a Sink that posts a finding as a Discord webhook embed. It paces
 // its posts (minSpacing) so a poll that produces many findings does not dump
 // them all at once or trip the webhook rate limit.
@@ -60,6 +65,7 @@ type discordEmbed struct {
 	Title       string `json:"title"`
 	URL         string `json:"url"`
 	Description string `json:"description"`
+	Color       int    `json:"color,omitempty"`
 }
 
 // Deliver posts one finding as an embed. The description is a compact pointer:
@@ -68,11 +74,13 @@ func (d *Discord) Deliver(ctx context.Context, f core.Finding) error {
 	if err := d.pace(ctx); err != nil {
 		return err
 	}
+	_, color := sourceLabel(f.Signal.Source)
 	payload := discordPayload{
 		Embeds: []discordEmbed{{
 			Title:       embedTitle(f.Signal),
 			URL:         threadLink(f.Signal),
 			Description: buildDescription(f),
+			Color:       color,
 		}},
 	}
 	body, err := json.Marshal(payload)
@@ -137,11 +145,22 @@ func (d *Discord) pace(ctx context.Context) error {
 	return nil
 }
 
+// embedTitle is the linked line of the embed, stamped with the source prefix:
+// "[HN] Datadog bill tripled overnight". Discord rejects an embed whose title
+// exceeds 256 characters, so an over-long one is truncated with the prefix kept:
+// knowing which platform a pointer came from matters more than the tail of a
+// long headline.
 func embedTitle(s core.Signal) string {
-	if s.Title != "" {
-		return s.Title
+	label, _ := sourceLabel(s.Source)
+	title := s.Title
+	if title == "" {
+		title = s.ID
 	}
-	return s.Source + ":" + s.ID
+	full := "[" + label + "] " + title
+	if len([]rune(full)) > discordTitleLimit {
+		full = string([]rune(full)[:discordTitleLimit-1]) + "…"
+	}
+	return full
 }
 
 // threadLink is the discussion thread a human opens to reply: the source
@@ -167,11 +186,14 @@ func buildDescription(f core.Finding) string {
 	if v.Reasoning != "" {
 		parts = append(parts, "_"+v.Reasoning+"_")
 	}
+	if a := attribution(f.Signal.Source, f.Signal.Author); a != "" {
+		parts = append(parts, a)
+	}
 	parts = append(parts,
 		age(f.Signal),
 		fmt.Sprintf("%d pts", f.Signal.Score),
 		fmt.Sprintf("%d comments", f.Signal.NumComments),
-		"🙋 to claim · ❌ if spam or not worth it",
+		claimEmoji+" to claim · "+skipEmoji+" if spam or not worth it",
 	)
 	return strings.Join(parts, " · ")
 }

@@ -5,37 +5,96 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
 )
 
-// lobstersEndpoint is the public "newest stories" JSON feed. No auth. It is a
-// firehose across all topics, so the beacon's keyword pre-filter does the
-// narrowing downstream (unlike HN, which is queried per keyword).
-const lobstersEndpoint = "https://lobste.rs/newest.json"
+// lobstersBase is the site root. Lobsters exposes JSON by suffixing .json to a
+// page path: /newest.json (the global firehose) and /t/<tag>,<tag>.json (the same
+// listing scoped to tags). There is deliberately no search call here: unlike HN's
+// Algolia API, lobste.rs search is HTML only (search.json returns 400), so tags
+// are the only server-side narrowing the platform offers.
+const lobstersBase = "https://lobste.rs"
+
+// lobstersMaxTags caps how many tags go into one /t/ request. Tag feeds accept a
+// comma list; a very long one makes an unwieldy URL for no gain, since the
+// response is capped at a page of stories either way.
+const lobstersMaxTags = 12
 
 // userAgent identifies the beacon to the APIs it polls. Lobsters in particular
 // asks pollers to send a descriptive User-Agent.
 const userAgent = "sos-beacon/0.1 (+https://github.com/ImmersiveFusion/if-sos-beacon)"
 
-// Lobsters is a Fetcher over the lobste.rs newest-stories feed.
+// Lobsters is a Fetcher over lobste.rs listings.
+//
+// It polls the global newest feed and, when the beacon configures tags, the
+// tag-scoped feed as well, merging both and deduping by story id. The two are
+// complementary: the global feed is a page of ALL newest stories (25 items,
+// roughly a day of site-wide volume, which is what a 12h freshness gate wants),
+// while the tag feed is a page of the newest stories WITHIN the topics the beacon
+// cares about, so a relevant story is not pushed off the page by unrelated
+// volume. Neither narrows by keyword, so the engine's pre-filter still gates
+// everything this returns.
 type Lobsters struct {
-	endpoint string
-	client   *http.Client
+	base   string // site root; overridden in tests
+	tags   []string
+	client *http.Client
 }
 
-// NewLobsters builds a Lobsters fetcher. It takes no per-beacon options: the
-// feed is unfiltered, so keyword narrowing happens in the pre-filter stage.
-func NewLobsters() *Lobsters {
+// NewLobsters builds a Lobsters fetcher. tags scope the extra tag feed
+// (lobsters.tags in the beacon config); empty means the global newest feed only.
+func NewLobsters(tags []string) *Lobsters {
 	return &Lobsters{
-		endpoint: lobstersEndpoint,
-		client:   &http.Client{Timeout: 20 * time.Second},
+		base:   lobstersBase,
+		tags:   normalizeTags(tags),
+		client: &http.Client{Timeout: 20 * time.Second},
 	}
+}
+
+// normalizeTags lowercases, trims, drops blanks and duplicates, and caps the
+// list, so a sloppy config cannot produce a malformed or absurd tag URL.
+func normalizeTags(in []string) []string {
+	var out []string
+	seen := make(map[string]bool, len(in))
+	for _, t := range in {
+		t = strings.ToLower(strings.TrimSpace(t))
+		if t == "" || seen[t] {
+			continue
+		}
+		seen[t] = true
+		out = append(out, t)
+		if len(out) == lobstersMaxTags {
+			break
+		}
+	}
+	return out
 }
 
 // Name identifies this source in Signal.Source and dedupe keys.
 func (l *Lobsters) Name() string { return "lobsters" }
+
+// feed is one listing to poll, plus whether its results are already scoped to
+// the beacon's topic by the operator's own tag choice.
+type feed struct {
+	url         string
+	prenarrowed bool
+}
+
+// feeds returns the listings to poll this run: always the global newest feed (a
+// firehose, so the engine still gates it by keyword), plus the tag-scoped feed
+// when tags are configured (on-topic by construction, so it is not gated).
+func (l *Lobsters) feeds() []feed {
+	out := []feed{{url: l.base + "/newest.json"}}
+	if len(l.tags) > 0 {
+		out = append(out, feed{
+			url:         l.base + "/t/" + strings.Join(l.tags, ",") + ".json",
+			prenarrowed: true,
+		})
+	}
+	return out
+}
 
 type lobstersStory struct {
 	ShortID      string       `json:"short_id"`
@@ -46,6 +105,7 @@ type lobstersStory struct {
 	CommentCount int          `json:"comment_count"`
 	Description  string       `json:"description_plain"`
 	CommentsURL  string       `json:"comments_url"`
+	Tags         []string     `json:"tags"`
 	SubmitterRaw lobstersUser `json:"submitter_user"`
 }
 
@@ -71,52 +131,85 @@ func (u *lobstersUser) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// Fetch pulls the newest stories and normalizes them to signals.
+// Fetch pulls every configured feed and normalizes the union to signals,
+// deduping by story id (a story in a watched tag appears in both feeds). A feed
+// that fails does not sink the others: the error is returned alongside whatever
+// the remaining feeds produced, and the engine counts it and moves on.
 func (l *Lobsters) Fetch(ctx context.Context) ([]core.Signal, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, l.endpoint, nil)
+	now := time.Now()
+	// index maps a story id to its position in out, so a story met again in a
+	// later feed can be UPGRADED rather than dropped. This matters: a recent
+	// story appears in both the global feed and its tag feed, and if first-seen
+	// simply won, the global (non-narrowed) copy would always shadow the
+	// tag-scoped one, silently defeating the tag configuration entirely.
+	index := make(map[string]int)
+	var out []core.Signal
+	var firstErr error
+
+	for _, f := range l.feeds() {
+		stories, err := l.get(ctx, f.url)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		for _, st := range stories {
+			if st.ShortID == "" {
+				continue
+			}
+			if i, dup := index[st.ShortID]; dup {
+				// Pre-narrowing is sticky: being in ANY configured tag feed
+				// means the operator declared this story on topic.
+				out[i].Prenarrowed = out[i].Prenarrowed || f.prenarrowed
+				continue
+			}
+			index[st.ShortID] = len(out)
+
+			var created time.Time
+			if t, perr := time.Parse(time.RFC3339, st.CreatedAt); perr == nil {
+				created = t.UTC()
+			}
+			out = append(out, core.Signal{
+				Source:      l.Name(),
+				ID:          st.ShortID,
+				Title:       st.Title,
+				URL:         st.URL,         // external link (empty for text posts); reference only
+				Permalink:   st.CommentsURL, // the thread to reply in
+				Author:      st.SubmitterRaw.Username,
+				Body:        st.Description,
+				Tags:        st.Tags, // most stories are link posts with an empty body: tags carry the topicality
+				Score:       st.Score,
+				NumComments: st.CommentCount,
+				CreatedAt:   created,
+				FetchedAt:   now,
+				Prenarrowed: f.prenarrowed,
+			})
+		}
+	}
+	return out, firstErr
+}
+
+func (l *Lobsters) get(ctx context.Context, endpoint string) ([]lobstersStory, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := l.client.Do(req) //nolint:gosec // G107: endpoint is a fixed constant, not user input
+	resp, err := l.client.Do(req) //nolint:gosec // G107: host is the fixed lobste.rs base; only the tag path varies, and tags are normalized
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("lobsters: unexpected status %d", resp.StatusCode)
+		return nil, fmt.Errorf("lobsters %s: unexpected status %d", endpoint, resp.StatusCode)
 	}
 
 	var stories []lobstersStory
 	if err := json.NewDecoder(resp.Body).Decode(&stories); err != nil {
-		return nil, fmt.Errorf("lobsters: decode: %w", err)
+		return nil, fmt.Errorf("lobsters %s: decode: %w", endpoint, err)
 	}
-
-	now := time.Now()
-	out := make([]core.Signal, 0, len(stories))
-	for _, st := range stories {
-		if st.ShortID == "" {
-			continue
-		}
-		var created time.Time
-		if t, perr := time.Parse(time.RFC3339, st.CreatedAt); perr == nil {
-			created = t.UTC()
-		}
-		out = append(out, core.Signal{
-			Source:      l.Name(),
-			ID:          st.ShortID,
-			Title:       st.Title,
-			URL:         st.URL,         // external link (empty for text posts); reference only
-			Permalink:   st.CommentsURL, // the thread to reply in
-			Author:      st.SubmitterRaw.Username,
-			Body:        st.Description,
-			Score:       st.Score,
-			NumComments: st.CommentCount,
-			CreatedAt:   created,
-			FetchedAt:   now,
-		})
-	}
-	return out, nil
+	return stories, nil
 }
