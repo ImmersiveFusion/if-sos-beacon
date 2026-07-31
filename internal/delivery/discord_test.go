@@ -37,6 +37,7 @@ func TestDeliver_EmbedShape(t *testing.T) {
 			Title       string `json:"title"`
 			URL         string `json:"url"`
 			Description string `json:"description"`
+			Color       int    `json:"color"`
 		} `json:"embeds"`
 	}
 
@@ -67,15 +68,83 @@ func TestDeliver_EmbedShape(t *testing.T) {
 		t.Fatalf("embeds len = %d, want 1", len(payload.Embeds))
 	}
 	e := payload.Embeds[0]
-	if e.Title != "Datadog bill" || e.URL != "https://ex.com/a" {
+	// The title carries the harvest source as a text prefix, so a reader can tell
+	// the platform without opening the link.
+	if e.Title != "[HN] Datadog bill" || e.URL != "https://ex.com/a" {
 		t.Errorf("title/url = %q/%q", e.Title, e.URL)
+	}
+	if e.Color != 0xFF6600 {
+		t.Errorf("color = %#x, want the HN stripe %#x", e.Color, 0xFF6600)
 	}
 	// The description is the pointer: bucket, fit, the model's summary + reasoning,
 	// and the claim prompt. Model text flows here and stops.
-	for _, want := range []string{"incumbent-rage", "fit 0.91", "MARKER_SUMMARY", "MARKER_REASONING", "🙋 to claim"} {
+	for _, want := range []string{"incumbent-rage", "fit 0.91", "MARKER_SUMMARY", "MARKER_REASONING", claimEmoji + " to claim", skipEmoji + " if spam"} {
 		if !strings.Contains(e.Description, want) {
 			t.Errorf("description missing %q: %q", want, e.Description)
 		}
+	}
+}
+
+// TestAttribution covers Developer Terms S5.2 for Reddit-sourced findings: the
+// username must be cited and the platform named. The link-back is the embed URL,
+// asserted in TestDeliver_EmbedShape.
+func TestAttribution(t *testing.T) {
+	tests := []struct {
+		source, author, want string
+	}{
+		{"reddit", "alice", "u/alice on Reddit"},
+		{"hn", "pg", "pg on Hacker News"},
+		{"lobsters", "bob", "bob on Lobsters"},
+		// Unregistered source: name it rather than dropping provenance.
+		{"mastodon", "carol", "carol on mastodon"},
+		// No author: omit the segment rather than render a dangling platform.
+		{"reddit", "", ""},
+	}
+	for _, tc := range tests {
+		if got := attribution(tc.source, tc.author); got != tc.want {
+			t.Errorf("attribution(%q, %q) = %q, want %q", tc.source, tc.author, got, tc.want)
+		}
+	}
+}
+
+func TestBuildDescription_CitesRedditAuthor(t *testing.T) {
+	f := sampleFinding()
+	f.Signal.Source = "reddit"
+	f.Signal.Author = "alice"
+	got := buildDescription(f)
+	if !strings.Contains(got, "u/alice on Reddit") {
+		t.Errorf("description must cite the Reddit username and platform (S5.2): %q", got)
+	}
+}
+
+func TestEmbedTitle_SourcePrefix(t *testing.T) {
+	tests := []struct {
+		name   string
+		signal core.Signal
+		want   string
+	}{
+		{"known source", core.Signal{Source: "hn", Title: "Datadog bill"}, "[HN] Datadog bill"},
+		{"lobsters", core.Signal{Source: "lobsters", Title: "The mean means nothing"}, "[LB] The mean means nothing"},
+		// An adapter with no table entry must still be labeled, never blank.
+		{"unregistered source", core.Signal{Source: "mastodon", Title: "x"}, "[MASTODON] x"},
+		{"no title falls back to id", core.Signal{Source: "hn", ID: "4242"}, "[HN] 4242"},
+	}
+	for _, tc := range tests {
+		if got := embedTitle(tc.signal); got != tc.want {
+			t.Errorf("%s: embedTitle = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+// TestEmbedTitle_Truncates guards the cap that would otherwise make Discord
+// reject the entire post rather than trim the title for us.
+func TestEmbedTitle_Truncates(t *testing.T) {
+	got := embedTitle(core.Signal{Source: "hn", Title: strings.Repeat("x", 400)})
+	if n := len([]rune(got)); n != discordTitleLimit {
+		t.Errorf("title rune length = %d, want %d", n, discordTitleLimit)
+	}
+	if !strings.HasPrefix(got, "[HN] ") {
+		t.Errorf("truncation dropped the source prefix: %q", got[:16])
 	}
 }
 

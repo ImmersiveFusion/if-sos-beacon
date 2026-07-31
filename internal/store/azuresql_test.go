@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"testing"
 
@@ -135,6 +136,49 @@ func TestAzureSQL_Record(t *testing.T) {
 
 	if err := s.Record(f); err != nil {
 		t.Fatalf("Record: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// TestAzureSQL_PurgeSource pins the deletion-on-revocation contract: findings
+// and dedupe rows for one source, both inside a single transaction, with the
+// row count reported back as the operator's receipt.
+func TestAzureSQL_PurgeSource(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectBegin()
+	mock.ExpectExec(sqlPurgeFinding).WithArgs("reddit").
+		WillReturnResult(sqlmock.NewResult(0, 3))
+	mock.ExpectExec(sqlPurgeSeen).WithArgs("reddit").
+		WillReturnResult(sqlmock.NewResult(0, 7))
+	mock.ExpectCommit()
+
+	n, err := s.PurgeSource("reddit")
+	if err != nil {
+		t.Fatalf("PurgeSource: %v", err)
+	}
+	if n != 10 {
+		t.Errorf("purged = %d, want 10 (3 findings + 7 dedupe rows)", n)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// A half-applied purge (findings gone, dedupe rows kept, or the reverse) is
+// worse than either outcome, so a failure mid-way must roll the whole thing back.
+func TestAzureSQL_PurgeSource_RollsBackOnFailure(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectBegin()
+	mock.ExpectExec(sqlPurgeFinding).WithArgs("reddit").
+		WillReturnResult(sqlmock.NewResult(0, 3))
+	mock.ExpectExec(sqlPurgeSeen).WithArgs("reddit").
+		WillReturnError(errors.New("connection reset"))
+	mock.ExpectRollback()
+
+	if _, err := s.PurgeSource("reddit"); err == nil {
+		t.Fatal("expected an error when the second delete fails")
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Error(err)

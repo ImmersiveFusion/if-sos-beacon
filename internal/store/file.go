@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
@@ -107,6 +108,43 @@ func (f *File) PendingDigest(beacon string) ([]core.Finding, error) {
 		}
 	}
 	return out, nil
+}
+
+// PurgeSource deletes every dedupe row and recorded finding that came from one
+// source, across all beacons, and reports how many rows went (core.Purger).
+//
+// The claim ledger is keyed by an opaque finding id supplied by a caller, so it
+// is not source-mappable here. Nothing writes it today (the claim bot is a later
+// phase), and it holds only the claimant's own name, never fetched content. When
+// that bot lands it must key claims by (source, id) so this can clear them too.
+func (f *File) PurgeSource(source string) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	n := 0
+	// Keys are "beacon:source:id"; match the middle segment exactly rather than
+	// substring-matching, so a source named "hn" cannot delete "hn-mirror" rows.
+	for k := range f.data.Seen {
+		parts := strings.Split(k, ":")
+		if len(parts) >= 3 && parts[1] == source {
+			delete(f.data.Seen, k)
+			n++
+		}
+	}
+	kept := f.data.Findings[:0]
+	for _, fnd := range f.data.Findings {
+		if fnd.Signal.Source == source {
+			n++
+			continue
+		}
+		kept = append(kept, fnd)
+	}
+	f.data.Findings = kept
+
+	if n == 0 {
+		return 0, nil // nothing to write
+	}
+	return n, f.saveLocked()
 }
 
 // Close is a no-op for the file store (every mutation already persisted).

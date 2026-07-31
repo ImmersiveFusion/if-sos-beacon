@@ -6,7 +6,7 @@ The AI finds the conversation. A person has it. **The tool never writes a reply.
 
 No infrastructure, no Immersive Fusion dependency: clone it, bring your own keys, run it. One binary runs many beacons at once, each just a config block. `#sos-apm` watches observability pain; `#sos-ai` watches AI-hype discourse; you could point one at gas prices or potholes.
 
-> **Status: Phase 0.** The skeleton runs end to end today: Hacker News source, any OpenAI-compatible model, Discord delivery, a JSON dedupe file, one-shot execution. Reddit + Lobsters sources, the boolean pre-filter, SQLite, digest batching, and the OTel demo grid land in later phases (see [Roadmap](#roadmap)). The architecture below is the whole platform; the checklist marks what's wired up now.
+> **Status: Phase 1 in progress.** Running end to end today: Hacker News, Lobsters and Reddit sources, any OpenAI-compatible model, Discord delivery, JSON or Azure SQL persistence, one-shot or container-loop execution, and OTel tracing to a live grid. The boolean pre-filter, SQLite, digest batching, and the Tier-2 sources land in later phases (see [Roadmap](#roadmap)). The architecture below is the whole platform; the checklist marks what's wired up now.
 
 ## Why this exists
 
@@ -28,7 +28,7 @@ sos-beacon is **ports-and-adapters**. The core pipeline (fetch -> pre-filter -> 
 
 | Port | What it does | Adapters |
 |---|---|---|
-| **Sources** (`Fetcher`) | over-collect candidate posts from a platform | **hn**, **lobsters** ✅ · reddit, bluesky, mastodon 🔜 |
+| **Sources** (`Fetcher`) | over-collect candidate posts from a platform | **hn**, **lobsters**, **reddit** ✅ · bluesky, mastodon, stackexchange 🔜 |
 | **AI** (`Classifier`) | sort a post into the beacon's buckets, score its fit | **openai-compatible** ✅ (OpenAI, Azure OpenAI, Ollama, vLLM, OpenRouter, Groq) · anthropic 🔜 |
 | **Delivery** (`Sink`) | post the pointer outward | **discord** ✅ · slack, email, webhook 🔜 |
 | **Persistence** (`Store`) | dedupe + claim ledger + digest accumulator | **file (JSON)** ✅ · sqlite, azuresql 🔜 |
@@ -41,12 +41,27 @@ Which source platforms the beacon will and will not harvest, and why. Adding a s
 
 | Tier | Platforms | Status | Why |
 |------|-----------|--------|-----|
-| **T1: core** | Hacker News, Lobsters, Reddit | HN + Lobsters ship now; Reddit (OAuth) is next | Public, API-friendly, high signal. Reddit needs OAuth (unauthenticated access died in 2025), and being maintained through that is itself a feature. |
+| **T1: core** | Hacker News, Lobsters, Reddit | HN + Lobsters run by default; **Reddit ships OFF, see below** | Public, API-friendly, high signal. Reddit needs OAuth (unauthenticated access died in 2025), and being maintained through that is itself a feature. |
 | **T2: community** | Bluesky, Mastodon, Stack Exchange, dev.to | Planned / community PRs | Free, mostly no-auth, good signal. Each is a real `Fetcher` plus one registry line. We do not ship inert stubs: a source is implemented or left out. |
 | **T3: quarantined** | X / Twitter | Behind a BYO-paid-key flag, opt-in only | The only source with real per-call cost and terms-of-service friction. Never on by default; you bring your own key and turn it on deliberately. |
 | **T4: refused** | LinkedIn; any server you do not administer; gray-market scraper APIs | Will not implement | These require pretending to be something you are not (fake accounts, scraping against terms, impersonation). The beacon does not do things that require pretending. This is a line, not a backlog. |
 
 The same ethic runs through the [refused-features list](#what-it-refuses-to-do): the tool harvests where it can do so honestly and openly, and refuses where it cannot.
+
+### The Reddit source ships disabled, and we do not run it
+
+`internal/sources/reddit.go` is a real, complete adapter: app-only OAuth, no keys committed, inert unless a beacon lists `reddit` in its `sources` AND supplies credentials. **Immersive Fusion does not operate it**, and you should not either until you have checked that you may.
+
+Reddit's Developer Terms S4.1 prohibits Data API access "by or on behalf of a business" and sends commercial users to a separate agreement with Reddit. The Data API Terms draw a narrower line (S3.1 / S3.2, keyed to commercial purpose and revenue rather than business status), and there is a real argument about which governs. That is a question for a lawyer, not a README. We are also not going to route around it with a personal account: Data API Terms S4.2 treats that as masking who is accessing and why, and it would gut the transparency our [code of conduct](CODE_OF_CONDUCT.md) is built on. So we left the source off and shipped the code anyway, because the one platform we cannot use should still be available to everyone who can.
+
+If you enable it, these obligations are yours:
+
+- **Register one `web app`, not a `script` app.** "Script" means personal use; using it from an organization misrepresents your OAuth identity (Data API Terms S2.8). One app covering all your beacons, not one per beacon (Developer Terms S4.2).
+- **Attribution is mandatory, not a nicety.** Developer Terms S5.2: link back to the thread, cite the author's username, and make clear the content came from Reddit. The Discord sink does all three for Reddit-sourced findings.
+- **Deletion on revocation.** Data API Terms S6 lets Reddit revoke access at any time without notice, and S3.2 / S6 then require deleting stored User Content and anything derived from it. Budget for purging your store, not just for switching the source off.
+- **A privacy policy** is required in the app registration (Data API Terms S2.6, Developer Terms S7.2).
+
+None of this touches the rest. Hacker News, Lobsters and the Tier-2 platforms carry no equivalent restriction.
 
 ## Quick start
 

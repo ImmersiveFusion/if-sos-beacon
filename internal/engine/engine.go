@@ -35,9 +35,10 @@ type Deps struct {
 	SourceSpacing time.Duration
 }
 
-// Stats summarizes one beacon run.
-type Stats struct {
-	Fetched    int // signals returned by all fetchers
+// SourceStats is one source's funnel through a single run: how many signals it
+// returned, and where they died.
+type SourceStats struct {
+	Fetched    int // signals returned by this fetcher
 	Stale      int // dropped by the freshness gate
 	Seen       int // skipped as already processed
 	Filtered   int // dropped by the keyword/boolean pre-filter
@@ -48,21 +49,64 @@ type Stats struct {
 	Errors     int // fetch/classify/deliver errors (signal retried next run)
 }
 
+// Stats summarizes one beacon run: the per-source funnel, plus its column sums.
+//
+// The split matters because the aggregate cannot answer the first question worth
+// asking when a channel goes quiet: is a source returning nothing, or returning
+// plenty that is all being filtered out? Those have opposite fixes, and a summed
+// "filtered" hides both. (Lobsters was the second case for its whole life so
+// far: 25 fetched and 25 filtered every poll, invisible next to HN's numbers.)
+type Stats struct {
+	SourceStats                        // the run total, summed across sources
+	BySource    map[string]SourceStats // per source, keyed by Fetcher.Name()
+}
+
+// tally accumulates a run's per-source counters. Only one counter is ever
+// incremented per outcome: the totals in Stats are derived from these at the end
+// rather than tracked in parallel.
+type tally map[string]*SourceStats
+
+// at returns the mutable counters for one source, creating them on first sight.
+func (t tally) at(source string) *SourceStats {
+	s, ok := t[source]
+	if !ok {
+		s = &SourceStats{}
+		t[source] = s
+	}
+	return s
+}
+
+// rollup snapshots the tally into Stats, summing the columns for the total.
+func (t tally) rollup() Stats {
+	st := Stats{BySource: make(map[string]SourceStats, len(t))}
+	for name, s := range t {
+		st.BySource[name] = *s
+		st.Fetched += s.Fetched
+		st.Stale += s.Stale
+		st.Seen += s.Seen
+		st.Filtered += s.Filtered
+		st.Classified += s.Classified
+		st.Delivered += s.Delivered
+		st.Digest += s.Digest
+		st.Dropped += s.Dropped
+		st.Errors += s.Errors
+	}
+	return st
+}
+
 // RunBeacon executes the full pipeline for one beacon.
 func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slog.Logger) (Stats, error) {
-	var st Stats
-
 	if deps.Deduper == nil {
-		return st, errors.New("engine: nil deduper")
+		return Stats{}, errors.New("engine: nil deduper")
 	}
 	if deps.Recorder == nil {
-		return st, errors.New("engine: nil recorder")
+		return Stats{}, errors.New("engine: nil recorder")
 	}
 	if deps.Classifier == nil {
-		return st, errors.New("engine: nil classifier")
+		return Stats{}, errors.New("engine: nil classifier")
 	}
 	if deps.Sink == nil {
-		return st, errors.New("engine: nil sink")
+		return Stats{}, errors.New("engine: nil sink")
 	}
 
 	// max_age freshness gate (empty = no gate).
@@ -70,7 +114,7 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 	if cfg.MaxAge != "" {
 		d, err := time.ParseDuration(cfg.MaxAge)
 		if err != nil {
-			return st, err
+			return Stats{}, err
 		}
 		maxAge = d
 	}
@@ -81,6 +125,8 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 		Buckets: cfg.Buckets,
 	}
 
+	counts := tally{}
+
 	tracer := telemetry.Tracer()
 	ctx, pollSpan := tracer.Start(ctx, "beacon.poll")
 	pollSpan.SetAttributes(
@@ -88,10 +134,21 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 		attribute.String(telemetry.AttrMode, cfg.Mode),
 	)
 	defer func() {
+		st := counts.rollup()
 		pollSpan.SetAttributes(
 			attribute.Int(telemetry.AttrFetched, st.Fetched),
 			attribute.Int(telemetry.AttrDelivered, st.Delivered),
 		)
+		// The per-source funnel goes on the span too, so the grid answers which
+		// source went quiet, and where in the funnel it died, without a log dive.
+		for name, s := range st.BySource {
+			pollSpan.SetAttributes(
+				attribute.Int(telemetry.SourceAttr(name, "fetched"), s.Fetched),
+				attribute.Int(telemetry.SourceAttr(name, "filtered"), s.Filtered),
+				attribute.Int(telemetry.SourceAttr(name, "classified"), s.Classified),
+				attribute.Int(telemetry.SourceAttr(name, "delivered"), s.Delivered),
+			)
+		}
 		pollSpan.End()
 	}()
 
@@ -102,7 +159,7 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 		if i > 0 && deps.SourceSpacing > 0 {
 			select {
 			case <-ctx.Done():
-				return st, ctx.Err()
+				return counts.rollup(), ctx.Err()
 			case <-time.After(deps.SourceSpacing):
 			}
 		}
@@ -110,16 +167,16 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 		fspan.SetAttributes(attribute.String(telemetry.AttrSource, f.Name()))
 		got, err := f.Fetch(fctx)
 		if err != nil {
-			st.Errors++
+			counts.at(f.Name()).Errors++
 			fspan.RecordError(err)
 			fspan.SetStatus(codes.Error, "fetch failed")
 			log.Warn("fetch failed", "beacon", cfg.Name, "source", f.Name(), "err", err)
 		}
 		fspan.SetAttributes(attribute.Int(telemetry.AttrFetched, len(got)))
 		fspan.End()
+		counts.at(f.Name()).Fetched += len(got)
 		signals = append(signals, got...)
 	}
-	st.Fetched = len(signals)
 
 	// Sources that already narrowed by keyword server-side skip the redundant
 	// client-side pre-filter, whose title-only matching would drop legitimate
@@ -133,27 +190,32 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 
 	now := time.Now()
 	for _, s := range signals {
+		src := counts.at(s.Source)
+
 		// --- freshness ---
 		if maxAge > 0 && !s.CreatedAt.IsZero() && now.Sub(s.CreatedAt) > maxAge {
-			st.Stale++
+			src.Stale++
 			continue
 		}
 
 		// --- novelty (dedupe, scoped to this beacon) ---
 		seen, err := deps.Deduper.Seen(cfg.Name, s.Source, s.ID)
 		if err != nil {
-			st.Errors++
+			src.Errors++
 			log.Warn("seen check failed", "beacon", cfg.Name, "id", s.ID, "err", err)
 			continue
 		}
 		if seen {
-			st.Seen++
+			src.Seen++
 			continue
 		}
 
-		// --- pre-filter (cheap, deterministic; skipped for keyword-queried sources) ---
-		if !prefiltered[s.Source] && !filter.Match(s, cfg.Keywords, cfg.Filter) {
-			st.Filtered++
+		// --- pre-filter (cheap, deterministic) ---
+		// Skipped when the source already narrowed to the topic: for the whole
+		// source (a keyword search API like HN or Reddit) or for this one signal
+		// (a Lobsters tag-scoped feed the operator configured).
+		if !prefiltered[s.Source] && !s.Prenarrowed && !filter.Match(s, cfg.Keywords, cfg.Filter) {
+			src.Filtered++
 			if err := deps.Deduper.MarkSeen(cfg.Name, s.Source, s.ID); err != nil {
 				log.Warn("mark seen failed", "beacon", cfg.Name, "id", s.ID, "err", err)
 			}
@@ -166,7 +228,7 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 		// `chat {model}` form; here we record the pointer fields (source, post
 		// id) and, on return, the verdict's bucket/fit/reasoning summary. Never
 		// the content.
-		st.Classified++
+		src.Classified++
 		cctx, cspan := tracer.Start(ctx, "signal.classify")
 		cspan.SetAttributes(
 			attribute.String(telemetry.AttrSource, s.Source),
@@ -175,7 +237,7 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 		v, err := deps.Classifier.Classify(cctx, s, bc)
 		if err != nil {
 			// No MarkSeen: leave it to retry on the next run.
-			st.Errors++
+			src.Errors++
 			cspan.RecordError(err)
 			cspan.SetStatus(codes.Error, "classify failed")
 			cspan.End()
@@ -191,7 +253,7 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 
 		// --- decide ---
 		if v.Bucket == "noise" || v.Fit < cfg.Thresholds.Digest {
-			st.Dropped++
+			src.Dropped++
 			if err := deps.Deduper.MarkSeen(cfg.Name, s.Source, s.ID); err != nil {
 				log.Warn("mark seen failed", "beacon", cfg.Name, "id", s.ID, "err", err)
 			}
@@ -210,7 +272,7 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 			)
 			if err := deps.Sink.Deliver(dctx, fnd); err != nil {
 				// No Record/MarkSeen: retry delivery next run.
-				st.Errors++
+				src.Errors++
 				dspan.RecordError(err)
 				dspan.SetStatus(codes.Error, "deliver failed")
 				dspan.End()
@@ -218,17 +280,17 @@ func RunBeacon(ctx context.Context, cfg config.BeaconConfig, deps Deps, log *slo
 				continue
 			}
 			dspan.End()
-			st.Delivered++
+			src.Delivered++
 		} else {
-			st.Digest++
+			src.Digest++
 		}
 
 		// Record marks the signal seen and accumulates it for the digest.
 		if err := deps.Recorder.Record(fnd); err != nil {
-			st.Errors++
+			src.Errors++
 			log.Warn("record failed", "beacon", cfg.Name, "id", s.ID, "err", err)
 		}
 	}
 
-	return st, nil
+	return counts.rollup(), nil
 }

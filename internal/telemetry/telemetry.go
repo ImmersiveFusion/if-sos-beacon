@@ -10,6 +10,7 @@ package telemetry
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -43,6 +44,14 @@ const (
 	AttrDelivered        = "sosbeacon.delivered"
 )
 
+// SourceAttr builds the per-source funnel attribute key for one field, e.g.
+// SourceAttr("lobsters", "filtered") = "sosbeacon.src.lobsters.filtered". Keys
+// stay inside the sosbeacon. namespace, so they pass the OVI-5 allowlist and
+// carry counts only, never content.
+func SourceAttr(source, field string) string {
+	return "sosbeacon.src." + source + "." + field
+}
+
 // Tracer returns the beacon's tracer. Before Init installs a provider this is a
 // no-op tracer, so instrumentation is always safe to call.
 func Tracer() trace.Tracer { return otel.Tracer(ScopeName) }
@@ -52,7 +61,12 @@ func Tracer() trace.Tracer { return otel.Tracer(ScopeName) }
 // shutdown, no provider installed) unless an OTLP endpoint is configured via the
 // standard OTEL_EXPORTER_OTLP_ENDPOINT / OTEL_EXPORTER_OTLP_TRACES_ENDPOINT env
 // vars, so local one-shot runs stay quiet unless the operator opts in.
-func Init(ctx context.Context) (func(context.Context) error, error) {
+//
+// log receives asynchronous export failures (see errorHandler): the batch
+// processor exports on a background goroutine, so a rejected api-key or an
+// unreachable collector never surfaces as Init's error. A nil log is allowed and
+// silences them.
+func Init(ctx context.Context, log *slog.Logger) (func(context.Context) error, error) {
 	noop := func(context.Context) error { return nil }
 	if !otlpConfigured() {
 		return noop, nil
@@ -63,20 +77,49 @@ func Init(ctx context.Context) (func(context.Context) error, error) {
 		return noop, err
 	}
 
-	res, err := resource.Merge(resource.Default(), resource.NewWithAttributes(
-		semconv.SchemaURL,
-		semconv.ServiceName(serviceName),
-	))
-	if err != nil {
-		return noop, err
+	// Export failures are asynchronous and were previously dropped on the floor.
+	if log != nil {
+		otel.SetErrorHandler(errorHandler{log: log})
 	}
 
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(&allowlistExporter{next: exp}),
-		sdktrace.WithResource(res),
+		sdktrace.WithResource(newResource()),
 	)
 	otel.SetTracerProvider(tp)
 	return tp.Shutdown, nil
+}
+
+// newResource builds the exported resource: the SDK defaults plus service.name.
+//
+// The service.name attribute is merged SCHEMALESS on purpose. resource.Default()
+// carries the schema URL of whatever semconv version the SDK ships, and
+// resource.Merge treats two DIFFERENT non-empty schema URLs as a conflict and
+// returns an error. Merging a schema-stamped resource here therefore breaks
+// every time an SDK bump moves that version, and the old code returned that
+// error from Init, which silently disabled tracing altogether (the global no-op
+// provider stayed installed and no span ever left the process). A schemaless
+// resource has no URL to conflict with, so the merge always succeeds and the
+// result keeps the SDK's own schema URL. Merge cannot fail on this input, so
+// there is no error to return; the fallback is defense in depth.
+func newResource() *resource.Resource {
+	res, err := resource.Merge(resource.Default(), resource.NewSchemaless(
+		semconv.ServiceName(serviceName),
+	))
+	if err != nil {
+		return resource.Default()
+	}
+	return res
+}
+
+// errorHandler routes the OTel SDK's asynchronous errors (failed exports, a
+// rejected api-key, a collector that is not reachable) into the beacon's logger
+// at ERROR, so a beacon that thinks it is exporting but is not says so at the
+// container's errors-only log level.
+type errorHandler struct{ log *slog.Logger }
+
+func (h errorHandler) Handle(err error) {
+	h.log.Error("otel export error", "err", err)
 }
 
 func otlpConfigured() bool {

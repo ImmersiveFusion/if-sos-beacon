@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -39,6 +40,7 @@ func main() {
 	logLevel := flag.String("log-level", "", "log verbosity: debug, info, warn, error (env SOS_BEACON_LOG_LEVEL)")
 	interval := flag.Duration("interval", 0, "container loop mode: poll every interval (e.g. 10m); 0 = one-shot. Per-beacon poll_interval overrides this.")
 	healthAddr := flag.String("health-addr", ":8080", "container loop mode: address for the /readyz and /healthz HTTP endpoints; empty disables")
+	purgeSource := flag.String("purge-source", "", "delete everything the store holds from this source (all beacons), then exit. For a platform that makes deletion a term of access, e.g. -purge-source reddit")
 	flag.Parse()
 
 	log := newLogger(resolveLevel(*logLevel))
@@ -47,10 +49,46 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	if *purgeSource != "" {
+		if err := purge(*configPath, *purgeSource, log); err != nil {
+			log.Error("purge failed", "source", *purgeSource, "err", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	if err := run(ctx, *configPath, *interval, *healthAddr, log); err != nil {
 		log.Error("fatal", "err", err)
 		os.Exit(1)
 	}
+}
+
+// purge deletes everything the configured store holds from one source and
+// exits. It fetches nothing and posts nothing.
+//
+// This is the operator's answer to a platform that can revoke access and then
+// require deletion of what you kept (Reddit's Data API Terms S6 / S3.2 are the
+// case that prompted it). The point is that complying is a command with a
+// receipt rather than hand-written SQL against a live store on a deadline.
+func purge(configPath, source string, log *slog.Logger) error {
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return err
+	}
+	st, err := store.Build(cfg.Store)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = st.Close() }()
+
+	n, err := st.PurgeSource(source)
+	if err != nil {
+		return err
+	}
+	// Printed, not just logged: this is a receipt an operator may need to show.
+	bannerf("purged %d rows from source %q (store=%s)\n", n, source, cfg.Store.Type)
+	log.Info("purge complete", "source", source, "rows", n, "store", cfg.Store.Type)
+	return nil
 }
 
 func run(ctx context.Context, configPath string, globalInterval time.Duration, healthAddr string, log *slog.Logger) error {
@@ -69,9 +107,11 @@ func run(ctx context.Context, configPath string, globalInterval time.Duration, h
 		version, len(cfg.Beacons), cfg.Store.Type, endpoint, globalInterval)
 
 	// --- OTel tracing (no-op unless an OTLP endpoint is configured via env) ---
-	shutdownTracing, err := telemetry.Init(ctx)
+	// Logged at ERROR, not WARN: an operator who configured an OTLP endpoint and
+	// got no traces must see why at the container's errors-only log level.
+	shutdownTracing, err := telemetry.Init(ctx, log)
 	if err != nil {
-		log.Warn("tracing init failed; continuing without it", "err", err)
+		log.Error("tracing init FAILED; running without traces", "endpoint", endpoint, "err", err)
 	}
 	defer func() {
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -288,7 +328,31 @@ func runBeacon(ctx context.Context, b config.BeaconConfig, classifier core.Class
 		log.Error("beacon failed", "beacon", b.Name, "err", err)
 		return
 	}
-	log.Info("beacon complete",
+	// Per-source funnel first: the aggregate below cannot distinguish a source
+	// that fetched nothing from one that fetched plenty and had it all filtered,
+	// and that distinction is the whole diagnosis when a channel goes quiet.
+	//
+	// A tally carrying errors is logged at ERROR, not INFO. Containers run at
+	// SOS_BEACON_LOG_LEVEL=error, so an INFO-only summary means a beacon whose
+	// fetches or classifications are failing every poll looks identical to a
+	// healthy quiet one: silence. Severity follows the content, not the phase.
+	for _, name := range sortedSources(stats.BySource) {
+		s := stats.BySource[name]
+		log.Log(ctx, levelFor(s.Errors), "source complete",
+			"beacon", b.Name,
+			"source", name,
+			"fetched", s.Fetched,
+			"stale", s.Stale,
+			"seen", s.Seen,
+			"filtered", s.Filtered,
+			"classified", s.Classified,
+			"delivered", s.Delivered,
+			"digest", s.Digest,
+			"dropped", s.Dropped,
+			"errors", s.Errors,
+		)
+	}
+	log.Log(ctx, levelFor(stats.Errors), "beacon complete",
 		"beacon", b.Name,
 		"fetched", stats.Fetched,
 		"stale", stats.Stale,
@@ -300,6 +364,26 @@ func runBeacon(ctx context.Context, b config.BeaconConfig, classifier core.Class
 		"dropped", stats.Dropped,
 		"errors", stats.Errors,
 	)
+}
+
+// levelFor raises a run summary to ERROR when it carries errors, so failures are
+// never invisible at the container's errors-only log level.
+func levelFor(errCount int) slog.Level {
+	if errCount > 0 {
+		return slog.LevelError
+	}
+	return slog.LevelInfo
+}
+
+// sortedSources returns the source names in a stable order, so successive poll
+// summaries are diffable rather than shuffled by map iteration.
+func sortedSources(bySource map[string]engine.SourceStats) []string {
+	names := make([]string, 0, len(bySource))
+	for n := range bySource {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // resolveLevel picks the log level: -log-level flag, then SOS_BEACON_LOG_LEVEL,

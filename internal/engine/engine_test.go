@@ -274,6 +274,45 @@ func TestRunBeacon_KeywordPrefilterSkipsFilter(t *testing.T) {
 	}
 }
 
+// TestRunBeacon_PrenarrowedSignalSkipsFilter covers the per-signal case: one
+// firehose source returning both gated and already-scoped results (Lobsters, its
+// global feed plus a configured tag feed). The tag-feed signal must reach the
+// classifier without matching a keyword; its firehose sibling must not.
+func TestRunBeacon_PrenarrowedSignalSkipsFilter(t *testing.T) {
+	store := newFakeStore()
+	clf := &fakeClassifier{verdict: core.Verdict{Bucket: "seeker", Fit: 0.9}}
+	cfg := baseConfig()
+	cfg.Keywords = []string{"datadog"}
+
+	now := time.Now()
+	deps := Deps{
+		Fetchers: []core.Fetcher{&fakeFetcher{name: "lobsters", signals: []core.Signal{
+			{Source: "lobsters", ID: "firehose", Title: "unrelated story", CreatedAt: now},
+			{Source: "lobsters", ID: "tagfeed", Title: "unrelated story", CreatedAt: now, Prenarrowed: true},
+		}}},
+		Classifier: clf, Sink: &fakeSink{}, Deduper: store, Recorder: store,
+	}
+
+	st, err := RunBeacon(context.Background(), cfg, deps, discardLogger())
+	if err != nil {
+		t.Fatalf("RunBeacon: %v", err)
+	}
+	if st.Filtered != 1 {
+		t.Errorf("Filtered = %d, want 1 (the firehose signal matches no keyword)", st.Filtered)
+	}
+	if st.Classified != 1 || clf.calls != 1 {
+		t.Errorf("Classified=%d calls=%d, want 1/1 (only the pre-narrowed signal)", st.Classified, clf.calls)
+	}
+	// The per-source tally must attribute both outcomes to lobsters.
+	src, ok := st.BySource["lobsters"]
+	if !ok {
+		t.Fatalf("BySource has no lobsters entry: %v", st.BySource)
+	}
+	if src.Fetched != 2 || src.Filtered != 1 || src.Classified != 1 {
+		t.Errorf("lobsters tally fetched=%d filtered=%d classified=%d, want 2/1/1", src.Fetched, src.Filtered, src.Classified)
+	}
+}
+
 func TestRunBeacon_DedupeIsPerBeacon(t *testing.T) {
 	// One shared store, two beacons, the same (source, id). Beacon A marks it
 	// seen (filtered); beacon B must still see it as novel and classify it.

@@ -44,9 +44,23 @@ type StoreConfig struct {
 	Database string `yaml:"database"`
 }
 
-// RedditConfig is per-beacon Reddit scoping (used from Phase 1).
+// RedditConfig is per-beacon Reddit scoping and credential wiring. Reddit needs
+// app-only OAuth (D6: unauthenticated access was shut off), so the beacon reads
+// a client id and secret from the environment. Only the env var NAMES live in
+// config; the values never touch a committed file.
 type RedditConfig struct {
-	Subreddits []string `yaml:"subreddits"`
+	Subreddits      []string `yaml:"subreddits"`
+	ClientIDEnv     string   `yaml:"client_id_env"`     // default REDDIT_CLIENT_ID
+	ClientSecretEnv string   `yaml:"client_secret_env"` // default REDDIT_CLIENT_SECRET
+}
+
+// LobstersConfig is per-beacon Lobsters scoping. Lobsters has no keyword search
+// API, so tags are the only server-side narrowing available: they add a
+// tag-scoped feed alongside the global newest feed. Listing the same tag names in
+// the beacon's `keywords` also lets tag membership alone pass the pre-filter,
+// which matters because most Lobsters stories are link posts with no body text.
+type LobstersConfig struct {
+	Tags []string `yaml:"tags"`
 }
 
 // Destination selects the Delivery port adapter for one beacon.
@@ -63,18 +77,19 @@ type Thresholds struct {
 
 // BeaconConfig is one topic instance.
 type BeaconConfig struct {
-	Name         string        `yaml:"name"`
-	Mode         string        `yaml:"mode"` // dispatch | watch
-	Sources      []string      `yaml:"sources"`
-	Reddit       RedditConfig  `yaml:"reddit"`
-	Filter       string        `yaml:"filter"` // boolean AND/OR/NOT (Phase 1)
-	Keywords     []string      `yaml:"keywords"`
-	Context      string        `yaml:"context"`
-	Buckets      []core.Bucket `yaml:"buckets"`
-	Destination  Destination   `yaml:"destination"`
-	Thresholds   Thresholds    `yaml:"thresholds"`
-	MaxAge       string        `yaml:"max_age"`       // e.g. "12h"; empty = no freshness gate
-	PollInterval string        `yaml:"poll_interval"` // container loop mode (Phase 2)
+	Name         string         `yaml:"name"`
+	Mode         string         `yaml:"mode"` // dispatch | watch
+	Sources      []string       `yaml:"sources"`
+	Reddit       RedditConfig   `yaml:"reddit"`
+	Lobsters     LobstersConfig `yaml:"lobsters"`
+	Filter       string         `yaml:"filter"` // boolean AND/OR/NOT (Phase 1)
+	Keywords     []string       `yaml:"keywords"`
+	Context      string         `yaml:"context"`
+	Buckets      []core.Bucket  `yaml:"buckets"`
+	Destination  Destination    `yaml:"destination"`
+	Thresholds   Thresholds     `yaml:"thresholds"`
+	MaxAge       string         `yaml:"max_age"`       // e.g. "12h"; empty = no freshness gate
+	PollInterval string         `yaml:"poll_interval"` // container loop mode (Phase 2)
 }
 
 // Load reads and validates the config, applying defaults.
@@ -117,6 +132,13 @@ func (c *Config) applyDefaults() {
 		}
 		if b.Thresholds.Digest == 0 {
 			b.Thresholds.Digest = 0.50
+		}
+		// Credential env var NAMES only; a forker can point these at their own.
+		if b.Reddit.ClientIDEnv == "" {
+			b.Reddit.ClientIDEnv = "REDDIT_CLIENT_ID"
+		}
+		if b.Reddit.ClientSecretEnv == "" {
+			b.Reddit.ClientSecretEnv = "REDDIT_CLIENT_SECRET"
 		}
 	}
 }
