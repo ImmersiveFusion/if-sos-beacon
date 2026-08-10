@@ -6,8 +6,8 @@ import (
 	"os"
 	"sort"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/config"
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
+	"github.com/ImmersiveFusion/sos-beacon/internal/config"
+	"github.com/ImmersiveFusion/sos-beacon/internal/core"
 )
 
 // ErrUnknownSource is returned by Build when a beacon lists a source name that

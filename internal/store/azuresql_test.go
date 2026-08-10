@@ -8,8 +8,8 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/config"
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
+	"github.com/ImmersiveFusion/sos-beacon/internal/config"
+	"github.com/ImmersiveFusion/sos-beacon/internal/core"
 )
 
 func TestResolveDSN(t *testing.T) {

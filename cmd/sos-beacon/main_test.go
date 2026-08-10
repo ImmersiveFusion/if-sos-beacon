@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/config"
+	"github.com/ImmersiveFusion/sos-beacon/internal/config"
 )
 
 func TestResolveInterval(t *testing.T) {

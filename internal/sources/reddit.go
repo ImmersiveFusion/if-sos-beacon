@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
+	"github.com/ImmersiveFusion/sos-beacon/internal/core"
 )
 
 // Reddit endpoints. Token exchange happens on www.reddit.com; every authenticated

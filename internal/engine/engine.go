@@ -13,10 +13,10 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/config"
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/filter"
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/telemetry"
+	"github.com/ImmersiveFusion/sos-beacon/internal/config"
+	"github.com/ImmersiveFusion/sos-beacon/internal/core"
+	"github.com/ImmersiveFusion/sos-beacon/internal/filter"
+	"github.com/ImmersiveFusion/sos-beacon/internal/telemetry"
 )
 
 // Deps bundles the port adapters one beacon run needs. Persistence is taken as

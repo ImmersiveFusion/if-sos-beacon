@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
+	"github.com/ImmersiveFusion/sos-beacon/internal/core"
 )
 
 // File is a JSON-file-backed Store. All access is guarded by a mutex; every

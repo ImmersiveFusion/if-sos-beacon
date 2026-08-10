@@ -31,11 +31,9 @@ Three rules hold for every adapter:
 
 ## Example 1: a new harvester (Sources port)
 
-> **On the import paths in these examples.** They read
-> `github.com/ImmersiveFusion/if-sos-beacon/...` while the repository is named `sos-beacon`. That is
-> the module path declared in `go.mod`, it is a public contract, and it is deliberately not being
-> renamed alongside the repository. Copy the imports verbatim and please do not "fix" them to match
-> the repository name.
+> **On the import paths in these examples.** The module path is
+> `github.com/ImmersiveFusion/sos-beacon`. It was `github.com/ImmersiveFusion/if-sos-beacon` up to
+> and including `v0.2.0`, so older examples and pinned consumers will show the previous path.
 
 Say you want a `devto` source. Create `internal/sources/devto.go`:
 
@@ -49,7 +47,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
+	"github.com/ImmersiveFusion/sos-beacon/internal/core"
 )
 
 type DevTo struct {

@@ -1,4 +1,4 @@
-module github.com/ImmersiveFusion/if-sos-beacon
+module github.com/ImmersiveFusion/sos-beacon
 
 go 1.25.7
 

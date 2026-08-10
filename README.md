@@ -67,7 +67,7 @@ None of this touches the rest. Hacker News, Lobsters and the Tier-2 platforms ca
 
 ```bash
 # install (or grab a release binary / the container image)
-go install github.com/ImmersiveFusion/if-sos-beacon/cmd/sos-beacon@latest
+go install github.com/ImmersiveFusion/sos-beacon/cmd/sos-beacon@latest
 
 # configure: copy the example, edit buckets/keywords/context
 cp config.example.yaml config.yaml
@@ -81,12 +81,11 @@ export SOS_APM_WEBHOOK=...   # a Discord channel webhook URL
 sos-beacon -config config.yaml
 ```
 
-> The `go install` path above still reads `if-sos-beacon` while the repository is named
-> `sos-beacon`. That mismatch is deliberate. A Go module path is a public contract, and it is
-> declared in `go.mod`; changing it would break every consumer already pinned to the old path.
-> The command works as written via GitHub's redirect and the module proxy's cached versions.
-> Please do not "fix" this to match the repository name: the module rename is tracked as its own
-> work item with a compatibility window.
+> **Module path changed.** Up to and including `v0.2.0` this module was
+> `github.com/ImmersiveFusion/if-sos-beacon`. It is now
+> `github.com/ImmersiveFusion/sos-beacon`, matching the repository name. Existing builds pinned to
+> `v0.2.0` or earlier keep resolving under the old path and are unaffected. To pick up any later
+> release, update your import paths and your `go.mod` require line to the new path.
 
 Or in a container (mount the config and the state file; the state file must persist between runs):
 

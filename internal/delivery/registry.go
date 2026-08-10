@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/config"
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
+	"github.com/ImmersiveFusion/sos-beacon/internal/config"
+	"github.com/ImmersiveFusion/sos-beacon/internal/core"
 )
 
 // Sentinel errors callers branch on: an unregistered destination type, or a

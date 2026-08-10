@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
+	"github.com/ImmersiveFusion/sos-beacon/internal/core"
 )
 
 // hnEndpoint is the Algolia HN Search "by date" API. We query per keyword and

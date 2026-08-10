@@ -3,7 +3,7 @@ package filter
 import (
 	"testing"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
+	"github.com/ImmersiveFusion/sos-beacon/internal/core"
 )
 
 func TestMatch(t *testing.T) {

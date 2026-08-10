@@ -19,15 +19,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/ai"
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/config"
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/delivery"
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/engine"
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/health"
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/sources"
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/store"
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/telemetry"
+	"github.com/ImmersiveFusion/sos-beacon/internal/ai"
+	"github.com/ImmersiveFusion/sos-beacon/internal/config"
+	"github.com/ImmersiveFusion/sos-beacon/internal/core"
+	"github.com/ImmersiveFusion/sos-beacon/internal/delivery"
+	"github.com/ImmersiveFusion/sos-beacon/internal/engine"
+	"github.com/ImmersiveFusion/sos-beacon/internal/health"
+	"github.com/ImmersiveFusion/sos-beacon/internal/sources"
+	"github.com/ImmersiveFusion/sos-beacon/internal/store"
+	"github.com/ImmersiveFusion/sos-beacon/internal/telemetry"
 )
 
 // version is stamped at release time by goreleaser via -ldflags "-X main.version=...".

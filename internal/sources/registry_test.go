@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/config"
+	"github.com/ImmersiveFusion/sos-beacon/internal/config"
 )
 
 func TestBuild(t *testing.T) {

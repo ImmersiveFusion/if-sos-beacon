@@ -4,7 +4,7 @@ package filter
 import (
 	"strings"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
+	"github.com/ImmersiveFusion/sos-beacon/internal/core"
 )
 
 // Match is the Phase 0 keyword-OR gate: a signal passes if any keyword appears
