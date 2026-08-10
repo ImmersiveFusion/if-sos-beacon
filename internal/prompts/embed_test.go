@@ -10,7 +10,7 @@ import (
 func TestBuildSystem(t *testing.T) {
 	bc := core.BeaconContext{
 		Beacon:  "sos-apm",
-		Context: "IAPM watches observability pain.",
+		Context: "DeepCube watches observability pain.",
 		Buckets: []core.Bucket{
 			{Name: "seeker", Emoji: "🙋", Definition: "asking for a tool"},
 			{Name: "rage", Definition: "furious at a vendor"}, // no emoji
@@ -21,7 +21,7 @@ func TestBuildSystem(t *testing.T) {
 	if strings.Contains(got, "{{CONTEXT}}") || strings.Contains(got, "{{BUCKETS}}") || strings.Contains(got, "{{SCHEMA}}") {
 		t.Errorf("unrendered placeholder remains:\n%s", got)
 	}
-	if !strings.Contains(got, "IAPM watches observability pain.") {
+	if !strings.Contains(got, "DeepCube watches observability pain.") {
 		t.Error("context not injected")
 	}
 	if !strings.Contains(got, "- seeker (🙋): asking for a tool") {
