@@ -8,7 +8,7 @@ The topic is not baked in: it's config. One beacon watches observability pain, a
 
 ## Quick start
 
-sos-beacon reads secrets from the environment and a small YAML config. Grab [`config.example.yaml`](https://github.com/ImmersiveFusion/if-sos-beacon/blob/main/config.example.yaml), edit it, then:
+sos-beacon reads secrets from the environment and a small YAML config. Grab [`config.example.yaml`](https://github.com/ImmersiveFusion/sos-beacon/blob/main/config.example.yaml), edit it, then:
 
 ```bash
 docker run --rm \
@@ -30,11 +30,11 @@ The image is multi-arch (`linux/amd64`, `linux/arm64`), distroless, and runs as 
 
 ## The one thing it will never do
 
-sos-beacon **surfaces pointers**: a place to look, a score, a bucket, a link. It does not draft replies, write outreach, or auto-post. That's not a setting; there is no code path from the AI's verdict to a posted message. See the [refused-features list](https://github.com/ImmersiveFusion/if-sos-beacon#what-it-refuses-to-do).
+sos-beacon **surfaces pointers**: a place to look, a score, a bucket, a link. It does not draft replies, write outreach, or auto-post. That's not a setting; there is no code path from the AI's verdict to a posted message. See the [refused-features list](https://github.com/ImmersiveFusion/sos-beacon#what-it-refuses-to-do).
 
 ## See it run, live, in 3D
 
-The container is OpenTelemetry-instrumented, and every LLM classification is a span with full OTel GenAI semantic conventions (model, token usage, latency, the verdict). Immersive Fusion runs the flagship beacons as live demo grids that stream into [IAPM](https://immersivefusion.com)'s 3D player, so you can walk the real pipeline as it moves: sources polling, the model judging each post, embeds firing. Unlike a synthetic demo, this is a real workload on public display. When a source fetcher dies, you watch the phantom form in the topology.
+The container is OpenTelemetry-instrumented, and every LLM classification is a span with full OTel GenAI semantic conventions (model, token usage, latency, the verdict). Immersive Fusion runs the flagship beacons as live demo grids that stream into [DeepCube (TM)](https://deepcube.ai)'s 3D player, so you can walk the real pipeline as it moves: sources polling, the model judging each post, embeds firing. Unlike a synthetic demo, this is a real workload on public display. When a source fetcher dies, you watch the phantom form in the topology.
 
 ## Tags
 
@@ -42,6 +42,8 @@ The container is OpenTelemetry-instrumented, and every LLM classification is a s
 
 ## Source, issues, full docs
 
-[github.com/ImmersiveFusion/if-sos-beacon](https://github.com/ImmersiveFusion/if-sos-beacon)
+[github.com/ImmersiveFusion/sos-beacon](https://github.com/ImmersiveFusion/sos-beacon)
+
+Product docs: [docs.deepcube.ai](https://docs.deepcube.ai)
 
 Apache-2.0. Built by Immersive Fusion.

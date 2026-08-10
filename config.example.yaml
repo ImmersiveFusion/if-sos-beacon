@@ -76,8 +76,8 @@ beacons:
     keywords: [datadog, "new relic", observability, APM, devops, performance]
     filter: '(datadog OR "new relic" OR observability OR APM) AND NOT (hiring OR job)'
     context: |
-      IAPM is 3D/VR spatial observability APM on OpenTelemetry. Incumbents: Datadog,
-      New Relic, Grafana. Pain: alert fatigue, dashboard sprawl, MTTR, per-host pricing.
+      DeepCube is the spatial observability platform, built on OpenTelemetry. Incumbents:
+      Datadog, New Relic, Grafana. Pain: alert fatigue, dashboard sprawl, MTTR, per-host pricing.
     buckets:
       - { name: seeker,           emoji: "🙋", definition: "actively asking for a tool recommendation" }
       - { name: incumbent-rage,   emoji: "🔥", definition: "furious at a vendor's bill or behavior" }

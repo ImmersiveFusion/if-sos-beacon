@@ -17,7 +17,7 @@ That portability is the point: the same build runs one-shot from a GitHub Action
 
 ### Immersive Fusion: the flagship beacons
 
-- **Where it runs:** the **Immersive Fusion cloud**, alongside the [tracegen](https://github.com/ImmersiveFusion/if-opentelemetry-tracegen) demo grids, deployed declaratively via GitOps (Argo CD).
+- **Where it runs:** the **Immersive Fusion cloud**, alongside the [tracegen](https://github.com/ImmersiveFusion/opentelemetry-tracegen) demo grids, deployed declaratively via GitOps (Argo CD).
 - **What for:** the flagship channels. `#sos-apm` watches observability pain (alert fatigue, dashboard sprawl, per-host pricing rage); each channel is a single config block watching public forums and posting pointers for a human to claim.
 - **Flavor:** the distroless container (`immersivefusion/sos-beacon`, pinned by digest in GitOps), reading its AI port through the same public `openai-compatible` adapter any forker uses (IF just points it at Azure OpenAI; there is no IF-only backend).
 - **The point:** IF runs its own OSS tool with zero private dependencies. If a source adapter dies mid-run, that failure is on public display, which is exactly the kind of honesty this project is built on.
@@ -28,7 +28,7 @@ That portability is the point: the same build runs one-shot from a GitHub Action
 
 Running a beacon somewhere (a homelab cron, a community Discord, a niche subreddit watch, a civic-issue tracker)? **List it too.** This board is earned, not bought: the only entry fee is that you actually run it.
 
-Open a pull request at [github.com/ImmersiveFusion/if-sos-beacon](https://github.com/ImmersiveFusion/if-sos-beacon) adding a block under [The deployments](#the-deployments) using this template:
+Open a pull request at [github.com/ImmersiveFusion/sos-beacon](https://github.com/ImmersiveFusion/sos-beacon) adding a block under [The deployments](#the-deployments) using this template:
 
 ```markdown
 ### <Your name or org>: <one-line what>
@@ -41,7 +41,7 @@ Open a pull request at [github.com/ImmersiveFusion/if-sos-beacon](https://github
 
 Keep it factual and specific: the specifics are the merit. No marketing, no logos-for-sale; just where the beacon runs and what it watches. A maintainer will review and merge; entries that name a platform, a topic, and a version (or a link) move fastest.
 
-Prefer not to write the PR yourself? [Open an issue](https://github.com/ImmersiveFusion/if-sos-beacon/issues/new) with the same details and we'll add it.
+Prefer not to write the PR yourself? [Open an issue](https://github.com/ImmersiveFusion/sos-beacon/issues/new) with the same details and we'll add it.
 
 ---
 

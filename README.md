@@ -81,6 +81,13 @@ export SOS_APM_WEBHOOK=...   # a Discord channel webhook URL
 sos-beacon -config config.yaml
 ```
 
+> The `go install` path above still reads `if-sos-beacon` while the repository is named
+> `sos-beacon`. That mismatch is deliberate. A Go module path is a public contract, and it is
+> declared in `go.mod`; changing it would break every consumer already pinned to the old path.
+> The command works as written via GitHub's redirect and the module proxy's cached versions.
+> Please do not "fix" this to match the repository name: the module rename is tracked as its own
+> work item with a compatibility window.
+
 Or in a container (mount the config and the state file; the state file must persist between runs):
 
 ```bash
@@ -157,7 +164,7 @@ Running a beacon channel is a responsibility. The humans who respond follow seve
 
 ## Watch the beacon run, live, in 3D
 
-The flagship beacons are OpenTelemetry-instrumented and stream into [IAPM](https://immersivefusion.com)'s 3D player: a **real** production workload on public display, deployed the same way as its sibling [tracegen](https://github.com/ImmersiveFusion/if-opentelemetry-tracegen)'s demo grids (distroless, multi-arch, GitOps via Argo CD). When a source fetcher dies mid-run, you can watch the topology notice. *(Demo grid lands in Phase 2; see the roadmap.)*
+The flagship beacons are OpenTelemetry-instrumented and stream into [DeepCube (TM)](https://deepcube.ai)'s 3D player: a **real** production workload on public display, deployed the same way as its sibling [tracegen](https://github.com/ImmersiveFusion/opentelemetry-tracegen)'s demo grids (distroless, multi-arch, GitOps via Argo CD). When a source fetcher dies mid-run, you can watch the topology notice. *(Demo grid lands in Phase 2; see the roadmap.)*
 
 **[Where does sos-beacon run?](WHERE-SOS-BEACON-RUNS.md)** is a community board of deployments. Add yours.
 
@@ -172,14 +179,14 @@ The flagship beacons are OpenTelemetry-instrumented and stream into [IAPM](https
 
 Part of Immersive Fusion's single-binary / zero-infra OSS family:
 
-- **[tracegen](https://github.com/ImmersiveFusion/if-opentelemetry-tracegen)**: a topology-rich OpenTelemetry trace generator; the deploy-shape and release template this repo matches file-for-file.
-- **[OpenTelemetry Chaos Simulator](https://github.com/ImmersiveFusion/if-opentelemetry-chaos-simulator-sample)**: interactive chaos engineering sandbox, [visualized in 3D](https://demo.iapm.app).
+- **[tracegen](https://github.com/ImmersiveFusion/opentelemetry-tracegen)**: a topology-rich OpenTelemetry trace generator; the deploy-shape and release template this repo matches file-for-file.
+- **[OpenTelemetry Chaos Simulator](https://github.com/ImmersiveFusion/opentelemetry-chaos-sim)**: interactive chaos engineering sandbox, [visualized in 3D](https://chaos.deepcube.ai).
 
 ## Building from source
 
 ```bash
-git clone https://github.com/ImmersiveFusion/if-sos-beacon.git
-cd if-sos-beacon
+git clone https://github.com/ImmersiveFusion/sos-beacon.git
+cd sos-beacon
 go build -o sos-beacon ./cmd/sos-beacon
 ```
 
