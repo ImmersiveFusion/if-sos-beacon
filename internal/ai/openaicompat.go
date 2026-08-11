@@ -17,8 +17,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/prompts"
+	"github.com/ImmersiveFusion/sos-beacon/internal/core"
+	"github.com/ImmersiveFusion/sos-beacon/internal/prompts"
 )
 
 const defaultBaseURL = "https://api.openai.com/v1"

@@ -17,8 +17,8 @@ import (
 	// cluster); a plain sqlserver://user:pass@host?database=... DSN uses SQL auth.
 	_ "github.com/microsoft/go-mssqldb/azuread"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/config"
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
+	"github.com/ImmersiveFusion/sos-beacon/internal/config"
+	"github.com/ImmersiveFusion/sos-beacon/internal/core"
 )
 
 // storeDSNEnv overrides the configured DSN (the cluster secret-store path, where

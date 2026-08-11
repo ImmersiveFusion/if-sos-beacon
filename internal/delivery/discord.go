@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
+	"github.com/ImmersiveFusion/sos-beacon/internal/core"
 )
 
 // defaultPostSpacing is the minimum gap between posts to one webhook. Discord

@@ -5,7 +5,7 @@
 Please report security issues privately, not in a public issue.
 
 - **Preferred:** open a private report via GitHub's
-  [Security advisories](https://github.com/ImmersiveFusion/if-sos-beacon/security/advisories/new)
+  [Security advisories](https://github.com/ImmersiveFusion/sos-beacon/security/advisories/new)
   ("Report a vulnerability").
 - **Email:** security@immersivefusion.com.
 

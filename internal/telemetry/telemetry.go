@@ -24,7 +24,7 @@ import (
 )
 
 // ScopeName is the instrumentation scope (tracer name) for beacon spans.
-const ScopeName = "github.com/ImmersiveFusion/if-sos-beacon"
+const ScopeName = "github.com/ImmersiveFusion/sos-beacon"
 
 // serviceName is the OTel service.name for the exported resource.
 const serviceName = "sos-beacon"

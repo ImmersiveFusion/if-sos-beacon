@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
+	"github.com/ImmersiveFusion/sos-beacon/internal/core"
 )
 
 // lobstersBase is the site root. Lobsters exposes JSON by suffixing .json to a
@@ -25,7 +25,7 @@ const lobstersMaxTags = 12
 
 // userAgent identifies the beacon to the APIs it polls. Lobsters in particular
 // asks pollers to send a descriptive User-Agent.
-const userAgent = "sos-beacon/0.1 (+https://github.com/ImmersiveFusion/if-sos-beacon)"
+const userAgent = "sos-beacon/0.1 (+https://github.com/ImmersiveFusion/sos-beacon)"
 
 // Lobsters is a Fetcher over lobste.rs listings.
 //

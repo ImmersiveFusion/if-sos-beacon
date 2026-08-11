@@ -20,8 +20,8 @@ sos-beacon **surfaces pointers**: a place to look, a score, a pick-list, a patte
 sos-beacon is a single Go module. The only runtime dependency is a YAML parser.
 
 ```bash
-git clone https://github.com/ImmersiveFusion/if-sos-beacon.git
-cd if-sos-beacon
+git clone https://github.com/ImmersiveFusion/sos-beacon.git
+cd sos-beacon
 go build -o sos-beacon ./cmd/sos-beacon
 
 # copy the example config, bring your own keys, run one pass

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
+	"github.com/ImmersiveFusion/sos-beacon/internal/core"
 	"gopkg.in/yaml.v3"
 )
 

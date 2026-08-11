@@ -67,7 +67,7 @@ None of this touches the rest. Hacker News, Lobsters and the Tier-2 platforms ca
 
 ```bash
 # install (or grab a release binary / the container image)
-go install github.com/ImmersiveFusion/if-sos-beacon/cmd/sos-beacon@latest
+go install github.com/ImmersiveFusion/sos-beacon/cmd/sos-beacon@latest
 
 # configure: copy the example, edit buckets/keywords/context
 cp config.example.yaml config.yaml
@@ -80,6 +80,12 @@ export SOS_APM_WEBHOOK=...   # a Discord channel webhook URL
 # one pass: fetch, classify, post pointers, exit
 sos-beacon -config config.yaml
 ```
+
+> **Module path changed.** Up to and including `v0.2.0` this module was
+> `github.com/ImmersiveFusion/if-sos-beacon`. It is now
+> `github.com/ImmersiveFusion/sos-beacon`, matching the repository name. Existing builds pinned to
+> `v0.2.0` or earlier keep resolving under the old path and are unaffected. To pick up any later
+> release, update your import paths and your `go.mod` require line to the new path.
 
 Or in a container (mount the config and the state file; the state file must persist between runs):
 
@@ -157,7 +163,7 @@ Running a beacon channel is a responsibility. The humans who respond follow seve
 
 ## Watch the beacon run, live, in 3D
 
-The flagship beacons are OpenTelemetry-instrumented and stream into [IAPM](https://immersivefusion.com)'s 3D player: a **real** production workload on public display, deployed the same way as its sibling [tracegen](https://github.com/ImmersiveFusion/if-opentelemetry-tracegen)'s demo grids (distroless, multi-arch, GitOps via Argo CD). When a source fetcher dies mid-run, you can watch the topology notice. *(Demo grid lands in Phase 2; see the roadmap.)*
+The flagship beacons are OpenTelemetry-instrumented and stream into [DeepCube (TM)](https://deepcube.ai)'s 3D player: a **real** production workload on public display, deployed the same way as its sibling [tracegen](https://github.com/ImmersiveFusion/opentelemetry-tracegen)'s demo grids (distroless, multi-arch, GitOps via Argo CD). When a source fetcher dies mid-run, you can watch the topology notice. *(Demo grid lands in Phase 2; see the roadmap.)*
 
 **[Where does sos-beacon run?](WHERE-SOS-BEACON-RUNS.md)** is a community board of deployments. Add yours.
 
@@ -172,14 +178,14 @@ The flagship beacons are OpenTelemetry-instrumented and stream into [IAPM](https
 
 Part of Immersive Fusion's single-binary / zero-infra OSS family:
 
-- **[tracegen](https://github.com/ImmersiveFusion/if-opentelemetry-tracegen)**: a topology-rich OpenTelemetry trace generator; the deploy-shape and release template this repo matches file-for-file.
-- **[OpenTelemetry Chaos Simulator](https://github.com/ImmersiveFusion/if-opentelemetry-chaos-simulator-sample)**: interactive chaos engineering sandbox, [visualized in 3D](https://demo.iapm.app).
+- **[tracegen](https://github.com/ImmersiveFusion/opentelemetry-tracegen)**: a topology-rich OpenTelemetry trace generator; the deploy-shape and release template this repo matches file-for-file.
+- **[OpenTelemetry Chaos Simulator](https://github.com/ImmersiveFusion/opentelemetry-chaos-sim)**: interactive chaos engineering sandbox, [visualized in 3D](https://chaos.deepcube.ai).
 
 ## Building from source
 
 ```bash
-git clone https://github.com/ImmersiveFusion/if-sos-beacon.git
-cd if-sos-beacon
+git clone https://github.com/ImmersiveFusion/sos-beacon.git
+cd sos-beacon
 go build -o sos-beacon ./cmd/sos-beacon
 ```
 

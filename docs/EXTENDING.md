@@ -31,6 +31,10 @@ Three rules hold for every adapter:
 
 ## Example 1: a new harvester (Sources port)
 
+> **On the import paths in these examples.** The module path is
+> `github.com/ImmersiveFusion/sos-beacon`. It was `github.com/ImmersiveFusion/if-sos-beacon` up to
+> and including `v0.2.0`, so older examples and pinned consumers will show the previous path.
+
 Say you want a `devto` source. Create `internal/sources/devto.go`:
 
 ```go
@@ -43,7 +47,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ImmersiveFusion/if-sos-beacon/internal/core"
+	"github.com/ImmersiveFusion/sos-beacon/internal/core"
 )
 
 type DevTo struct {
