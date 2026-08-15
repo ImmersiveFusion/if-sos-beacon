@@ -8,9 +8,29 @@ No infrastructure, no Immersive Fusion dependency: clone it, bring your own keys
 
 > **Status: Phase 1 in progress.** Running end to end today: Hacker News, Lobsters and Reddit sources, any OpenAI-compatible model, Discord delivery, JSON or Azure SQL persistence, one-shot or container-loop execution, and OTel tracing to a live grid. The boolean pre-filter, SQLite, digest batching, and the Tier-2 sources land in later phases (see [Roadmap](#roadmap)). The architecture below is the whole platform; the checklist marks what's wired up now.
 
+## What SOS means
+
+**SOS is the Spatial Observability Signal. It is also Save Our Souls.** Both meanings are load-bearing, and it acquired them in that order.
+
+It began as the first. [Spatial observability](https://spatialobservability.org) argues that flattening a running system into dashboards has a cost: engineers with forty tabs open, alert fatigue, incidents where most of the time goes to working out which thing actually broke. A manifesto can assert that. A beacon can show it, live and in public, by catching it happening in real people's own words every hour. The first job was evidence.
+
+Then the name doubled, and the second meaning turned out to be the larger one. The signal was never only a market signal; it was a distress call. Distress is not a niche, so the tool generalised. It is topic-agnostic by design, and observability is simply the first thing we pointed it at.
+
+### A public good in a graveyard
+
+The tooling landscape is full of dead things. Scrapers that broke when a platform changed its auth and were never fixed. Repos whose last commit was three years ago. Tools that solved a real problem for someone, once. A maintained, Apache-2.0, runs-without-us tool is itself the argument, and keeping it alive is most of the work. Being maintained is the statement.
+
+### Running one is a responsibility, not a right
+
+A tool that finds people in difficulty at scale is power, and that power carries a duty. Answer as a human, in your own words, disclosed as yourself, or do not run it. Anyone can run their own beacon and we would rather they did. Running it honestly is the price of admission, and nothing in the licence enforces it.
+
+To be clear about the size of the promise: it is small. A person notices and shows up and means it. That is all it is, and it is worth doing.
+
 ## Why this exists
 
 The commercial "social listening" category races toward one thing: bots that talk to unaware humans at scale, monitoring fused with automated cold outreach. sos-beacon is the inverted, disclosed, human-replies-only design. It surfaces where a real person might genuinely help, and then gets out of the way. The contribution isn't the monitoring; plenty of tools monitor. It's intent-scored triage plus community dispatch plus a response ledger, with the anti-spam stance built into the type system instead of a policy page.
+
+That is one idea applied to outreach: **the machine's job is reach, the human's job is the answer.** AI is good at hearing a thousand threads at once. It is not good at showing up and meaning it, and that is not a gap that closes with a better model. So the AI finds the cry and a person owns the reply. **Surface is the only verb**, and it is enforced by the type system rather than promised in a policy page: there is no code path from a classification to written prose. Answering a Save Our Souls with a bot is the precise hollow thing this refuses to build.
 
 ## How it works
 
@@ -161,9 +181,15 @@ If a feature's output is a message a human is meant to send, it fails the accept
 
 Running a beacon channel is a responsibility. The humans who respond follow seven rules: one responder per thread, reply as yourself (never AI-drafted), never cross-vote, disclose affiliation, help without selling, skip vendor-hostile threads, and link the repo if accused of shilling. Read them before you run a channel: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
 
-## Watch the beacon run, live, in 3D
+## Organic telemetry, and watching it run
 
-The flagship beacons are OpenTelemetry-instrumented and stream into [DeepCube (TM)](https://deepcube.ai)'s 3D player: a **real** production workload on public display, deployed the same way as its sibling [tracegen](https://github.com/ImmersiveFusion/opentelemetry-tracegen)'s demo grids (distroless, multi-arch, GitOps via Argo CD). When a source fetcher dies mid-run, you can watch the topology notice. *(Demo grid lands in Phase 2; see the roadmap.)*
+Being OpenTelemetry-instrumented has a second purpose, and it is genuinely the secondary one: the beacon is a real workload doing a real job, so it emits **real** telemetry as a byproduct.
+
+That makes it the **organic** counterpart to its sibling [tracegen](https://github.com/ImmersiveFusion/opentelemetry-tracegen), which generates **synthetic** OTel out of nothing. Where tracegen invents a system to observe, sos-beacon is one. Both speak plain OTLP, so both feed anything: Jaeger, Tempo, Grafana, an OpenTelemetry Collector, or spatial tools such as DeepCube.
+
+Its most instructive failure is its own. When a source fetcher dies mid-run, the topology notices before any alert does: the thing that was calling it is still calling, and nothing answers. A hole where a service used to be. The rescuer's own SOS, made visible.
+
+The flagship beacons stream into [DeepCube](https://deepcube.ai)'s 3D player, deployed the same way as tracegen's demo grids (distroless, multi-arch, GitOps via Argo CD). The grids run live on Twitch at [twitch.tv/deepcubelive](https://www.twitch.tv/deepcubelive), no account and nothing to install. *(The beacon's own demo grid lands in Phase 2; see the roadmap.)*
 
 **[Where does sos-beacon run?](WHERE-SOS-BEACON-RUNS.md)** is a community board of deployments. Add yours.
 
@@ -176,9 +202,9 @@ The flagship beacons are OpenTelemetry-instrumented and stream into [DeepCube (T
 
 ## Related tools
 
-Part of Immersive Fusion's single-binary / zero-infra OSS family:
+A small family of single-binary, zero-infra OpenTelemetry tools, all Apache-2.0 and all usable without an Immersive Fusion account:
 
-- **[tracegen](https://github.com/ImmersiveFusion/opentelemetry-tracegen)**: a topology-rich OpenTelemetry trace generator; the deploy-shape and release template this repo matches file-for-file.
+- **[tracegen](https://github.com/ImmersiveFusion/opentelemetry-tracegen)**: topology-rich **synthetic** OpenTelemetry from a single binary, the counterpart to this tool's organic output. Also the deploy-shape and release template this repo matches file-for-file.
 - **[OpenTelemetry Chaos Simulator](https://github.com/ImmersiveFusion/opentelemetry-chaos-sim)**: interactive chaos engineering sandbox, [visualized in 3D](https://chaos.deepcube.ai).
 
 ## Building from source
