@@ -1,3 +1,5 @@
+![A beacon on a vast dark plain of scattered signals, three burning magenta where someone is asking for help](.img/banner.jpg)
+
 # sos-beacon
 
 A single-binary, topic-agnostic **signal harvester**. It watches public forums for the conversations you care about, has an AI sort each hit into buckets you define (`someone's asking for help` / `someone's furious at a vendor` / `just describing the pain`), scores it, and posts a short **pointer** into a Discord channel. A human sees the pointer, raises a hand to claim it, and replies **in their own words**.
