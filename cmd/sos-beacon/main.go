@@ -97,7 +97,7 @@ func run(ctx context.Context, configPath string, globalInterval time.Duration, h
 		return err
 	}
 
-	// Startup banner: printed regardless of log level (same pattern as tracegen), so a
+	// Startup banner: printed regardless of log level (same pattern as Snowglobe), so a
 	// running container always announces itself even at SOS_BEACON_LOG_LEVEL=error.
 	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 	if endpoint == "" {
@@ -412,5 +412,5 @@ func newLogger(level slog.Level) *slog.Logger {
 // bannerf writes operator-orientation output to stderr regardless of log level, so a
 // running container always announces itself even at SOS_BEACON_LOG_LEVEL=error. It is
 // not a leveled log (slog has no "always" severity), and it shares stderr with the slog
-// stream so the two stay ordered. tracegen uses the same pattern.
+// stream so the two stay ordered. Snowglobe uses the same pattern.
 func bannerf(format string, a ...any) { fmt.Fprintf(os.Stderr, format, a...) }
