@@ -17,7 +17,7 @@ That portability is the point: the same build runs one-shot from a GitHub Action
 
 ### Immersive Fusion: the flagship beacons
 
-- **Where it runs:** the **Immersive Fusion cloud**, alongside the [tracegen](https://github.com/ImmersiveFusion/opentelemetry-tracegen) demo grids, deployed declaratively via GitOps (Argo CD).
+- **Where it runs:** the **Immersive Fusion cloud**, alongside the [Snowglobe](https://github.com/ImmersiveFusion/snowglobe) demo grids, deployed declaratively via GitOps (Argo CD).
 - **What for:** the flagship channels. `#sos-apm` watches observability pain (alert fatigue, dashboard sprawl, per-host pricing rage); each channel is a single config block watching public forums and posting pointers for a human to claim.
 - **Flavor:** the distroless container (`immersivefusion/sos-beacon`, pinned by digest in GitOps), reading its AI port through the same public `openai-compatible` adapter any forker uses (IF just points it at Azure OpenAI; there is no IF-only backend).
 - **The point:** IF runs its own OSS tool with zero private dependencies. If a source adapter dies mid-run, that failure is on public display, which is exactly the kind of honesty this project is built on.
