@@ -187,11 +187,11 @@ Running a beacon channel is a responsibility. The humans who respond follow seve
 
 Being OpenTelemetry-instrumented has a second purpose, and it is genuinely the secondary one: the beacon is a real workload doing a real job, so it emits **real** telemetry as a byproduct.
 
-That makes it the **organic** counterpart to its sibling [tracegen](https://github.com/ImmersiveFusion/opentelemetry-tracegen), which generates **synthetic** OTel out of nothing. Where tracegen invents a system to observe, sos-beacon is one. Both speak plain OTLP, so both feed anything: Jaeger, Tempo, Grafana, an OpenTelemetry Collector, or spatial tools such as DeepCube.
+That makes it the **organic** counterpart to its sibling [Snowglobe](https://github.com/ImmersiveFusion/snowglobe), which generates **synthetic** OTel out of nothing. Where Snowglobe invents a system to observe, sos-beacon is one. Both speak plain OTLP, so both feed anything: Jaeger, Tempo, Grafana, an OpenTelemetry Collector, or spatial tools such as DeepCube.
 
 Its most instructive failure is its own. When a source fetcher dies mid-run, the topology notices before any alert does: the thing that was calling it is still calling, and nothing answers. A hole where a service used to be. The rescuer's own SOS, made visible.
 
-The flagship beacons stream into [DeepCube](https://deepcube.ai)'s 3D player, deployed the same way as tracegen's demo grids (distroless, multi-arch, GitOps via Argo CD). The grids run live on Twitch at [twitch.tv/deepcubelive](https://www.twitch.tv/deepcubelive), no account and nothing to install. *(The beacon's own demo grid lands in Phase 2; see the roadmap.)*
+The flagship beacons stream into [DeepCube](https://deepcube.ai)'s 3D player, deployed the same way as Snowglobe's demo grids (distroless, multi-arch, GitOps via Argo CD). The grids run live on Twitch at [twitch.tv/deepcubelive](https://www.twitch.tv/deepcubelive), no account and nothing to install. *(The beacon's own demo grid lands in Phase 2; see the roadmap.)*
 
 **[Where does sos-beacon run?](WHERE-SOS-BEACON-RUNS.md)** is a community board of deployments. Add yours.
 
@@ -206,8 +206,8 @@ The flagship beacons stream into [DeepCube](https://deepcube.ai)'s 3D player, de
 
 A small family of single-binary, zero-infra OpenTelemetry tools, all Apache-2.0 and all usable without an Immersive Fusion account:
 
-- **[tracegen](https://github.com/ImmersiveFusion/opentelemetry-tracegen)**: topology-rich **synthetic** OpenTelemetry from a single binary, the counterpart to this tool's organic output. Also the deploy-shape and release template this repo matches file-for-file.
-- **[OpenTelemetry Chaos Simulator](https://github.com/ImmersiveFusion/opentelemetry-chaos-sim)**: interactive chaos engineering sandbox, [visualized in 3D](https://chaos.deepcube.ai).
+- **[Snowglobe](https://github.com/ImmersiveFusion/snowglobe)**: topology-rich **synthetic** OpenTelemetry from a single binary, the counterpart to this tool's organic output. Also the deploy-shape and release template this repo matches file-for-file.
+- **[Shoebox](https://github.com/ImmersiveFusion/shoebox)**: paste a diagram of a system, break something in it, and fire one request through. A snowglobe is sealed; in a shoebox you can open it up. [Visualized in 3D](https://shoebox.deepcube.ai).
 
 ## Building from source
 
