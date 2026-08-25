@@ -1,7 +1,7 @@
 name: CI
 
 # Quality gate on every push and PR. This is ADDITIVE to release.yml (which
-# stays byte-matched to tracegen): build/release/container conventions are
+# stays byte-matched to Snowglobe): build/release/container conventions are
 # unchanged; this workflow only adds static analysis, tests, and the house
 # R-LOCAL-005 glyph guard. Action versions are pinned.
 

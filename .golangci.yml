@@ -1,5 +1,5 @@
-# golangci-lint v2 configuration. Quality gate ADDITIVE to tracegen parity:
-# release/build/container stay byte-matched to tracegen; this adds static
+# golangci-lint v2 configuration. Quality gate ADDITIVE to Snowglobe parity:
+# release/build/container stay byte-matched to Snowglobe; this adds static
 # analysis on top. Run locally with `golangci-lint run` (and `golangci-lint fmt`
 # to apply the gofumpt formatter).
 version: "2"
