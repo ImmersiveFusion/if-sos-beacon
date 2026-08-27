@@ -1,6 +1,7 @@
 # Developer convenience targets. CI (.github/workflows/ci.yml) is the source of
-# truth; these mirror it for local use. The binary/release path stays tracegen-
-# matched (goreleaser + release.yml), so there is no release target here.
+# truth; these mirror it for local use. The binary/release path stays
+# Snowglobe-matched (goreleaser + release.yml), so there is no release target
+# here.
 
 BINARY := sos-beacon
 PKG := ./cmd/sos-beacon
