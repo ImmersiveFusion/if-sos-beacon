@@ -8,7 +8,7 @@ The AI finds the conversation. A person has it. **The tool never writes a reply.
 
 No infrastructure, no Immersive Fusion dependency: clone it, bring your own keys, run it. One binary runs many beacons at once, each just a config block. `#sos-apm` watches observability pain; `#sos-ai` watches AI-hype discourse; you could point one at gas prices or potholes.
 
-> **Status: Phase 1 in progress.** Running end to end today: Hacker News, Lobsters and Reddit sources, any OpenAI-compatible model, Discord delivery, JSON or Azure SQL persistence, one-shot or container-loop execution, and OTel tracing to a live grid. The boolean pre-filter, SQLite, digest batching, and the Tier-2 sources land in later phases (see [Roadmap](#roadmap)). The architecture below is the whole platform; the checklist marks what's wired up now.
+> **Status: in use.** Running end to end today: **Hacker News and Lobsters** sources, any OpenAI-compatible model, Discord delivery, JSON or Azure SQL persistence, one-shot or container-loop execution, and OTel tracing to a live grid. Two beacons are deployed, `#sos-apm` and `#sos-ai`. **The Reddit adapter is complete but ships disabled and we do not run it**, which is a decision rather than a gap: see [The Reddit source ships disabled](#the-reddit-source-ships-disabled-and-we-do-not-run-it). The boolean pre-filter, SQLite, digest batching and the Tier-2 sources are still ahead (see [Roadmap](#roadmap)). The architecture below is the whole platform; the checklist marks what's wired up now.
 
 ## What SOS means
 
@@ -197,10 +197,23 @@ The flagship beacons stream into [DeepCube](https://deepcube.ai)'s 3D player, de
 
 ## Roadmap
 
-- **Phase 0 (done):** core + four ports; HN source; openai-compatible AI; Discord delivery; file store; one-shot run. Real pointers land in a real channel.
-- **Phase 1 (in progress):** Reddit OAuth + Lobsters sources; boolean `AND/OR/NOT` pre-filter; SQLite store; digest batching + thresholds; `anthropic` adapter; the flagship `#sos-apm` end to end.
-- **Phase 2:** OTel instrumentation (with a secret-scrub processor + span-attribute allowlist); the demo grid; Azure SQL store + container run-loop; GitHub Actions cron.
-- **Phase 3:** Tier-2 sources as community PRs (Bluesky first); weekly-themes digest; watch-mode wording; the reaction-reading claim bot.
+**Shipped.** Core plus the four ports. Hacker News and Lobsters sources. Any OpenAI-compatible
+model. Discord delivery. JSON file and Azure SQL stores. One-shot runs and the long-running
+container loop (`-interval`). OpenTelemetry instrumentation with a secret-scrub processor and a
+span-attribute allowlist. **Two beacons are deployed and streaming to live grids, `#sos-apm` and
+`#sos-ai`.**
+
+**Not planned: the Reddit source.** The adapter is complete and it ships **disabled**, and we do not
+run it. That is a decision, not a backlog item, and the reasoning is in
+[The Reddit source ships disabled](#the-reddit-source-ships-disabled-and-we-do-not-run-it). If you
+are entitled to run it, that section says what you would owe.
+
+**Next.** The boolean `AND/OR/NOT` pre-filter (#12). A SQLite store, for people who want persistence
+without Azure. An `anthropic` adapter. A GitHub Actions cron, for anyone who would rather not run a
+container.
+
+**Later.** Tier-2 sources as community pull requests, Bluesky first. Weekly-themes digest.
+Watch-mode wording. The reaction-reading claim bot.
 
 ## Related tools
 
