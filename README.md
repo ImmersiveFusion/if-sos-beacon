@@ -197,8 +197,8 @@ The flagship beacons stream into [DeepCube](https://deepcube.ai)'s 3D player, de
 
 ## Roadmap
 
-- **Phase 0 (now):** core + four ports; HN source; openai-compatible AI; Discord delivery; file store; one-shot run. Real pointers land in a real channel.
-- **Phase 1:** Reddit OAuth + Lobsters sources; boolean `AND/OR/NOT` pre-filter; SQLite store; digest batching + thresholds; `anthropic` adapter; the flagship `#sos-apm` end to end.
+- **Phase 0 (done):** core + four ports; HN source; openai-compatible AI; Discord delivery; file store; one-shot run. Real pointers land in a real channel.
+- **Phase 1 (in progress):** Reddit OAuth + Lobsters sources; boolean `AND/OR/NOT` pre-filter; SQLite store; digest batching + thresholds; `anthropic` adapter; the flagship `#sos-apm` end to end.
 - **Phase 2:** OTel instrumentation (with a secret-scrub processor + span-attribute allowlist); the demo grid; Azure SQL store + container run-loop; GitHub Actions cron.
 - **Phase 3:** Tier-2 sources as community PRs (Bluesky first); weekly-themes digest; watch-mode wording; the reaction-reading claim bot.
 
