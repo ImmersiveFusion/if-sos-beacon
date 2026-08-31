@@ -6,7 +6,7 @@ A single-binary, topic-agnostic **signal harvester**. It watches public forums f
 
 The AI finds the conversation. A person has it. **The tool never writes a reply.**
 
-No infrastructure, no Immersive Fusion dependency: clone it, bring your own keys, run it. One binary runs many beacons at once, each just a config block. `#sos-apm` watches observability pain; `#sos-ai` watches AI-hype discourse; you could point one at gas prices or potholes.
+No infrastructure, no Immersive Fusion dependency: clone it, bring your own keys, run it. One binary runs many beacons at once, each just a config block. `#sos-apm` watches observability pain; `#sos-ai` belongs to the academies and is pointed at the AI reckoning itself, [described in the academy's own words below](#sos-ai-the-academy-beacon); you could point one at gas prices or potholes.
 
 > **Status: in use.** Running end to end today: **Hacker News and Lobsters** sources, any OpenAI-compatible model, Discord delivery, JSON or Azure SQL persistence, one-shot or container-loop execution, and OTel tracing to a live grid. Two beacons are deployed, `#sos-apm` and `#sos-ai`. **The Reddit adapter is complete but ships disabled and we do not run it**, which is a decision rather than a gap: see [The Reddit source ships disabled](#the-reddit-source-ships-disabled-and-we-do-not-run-it). The boolean pre-filter, SQLite, digest batching and the Tier-2 sources are still ahead (see [Roadmap](#roadmap)). The architecture below is the whole platform; the checklist marks what's wired up now.
 
@@ -178,6 +178,30 @@ sos-beacon **surfaces pointers**: a place to look, a score, a pick-list, a patte
 - **Gray-market scraper APIs**
 
 If a feature's output is a message a human is meant to send, it fails the acceptance test in [`CONTRIBUTING.md`](CONTRIBUTING.md) automatically. This is the whole point of the project, not a limitation of it.
+
+## `#sos-ai` (the academy beacon)
+
+One beacon in this family is not pointed at observability pain at all.
+
+> #sos-ai is the beacon pointed at the AI reckoning itself, and it belongs to the academies, not the
+> product.
+>
+> When someone is frightened of AI, afraid of losing their work to it, or just trying in good faith to
+> make sense of what is happening, the beacon surfaces that moment and a person from the academy shows
+> up. A person, in their own words, disclosed as themselves. It never pitches, never sells, and never
+> writes the reply. Surface is the only verb.
+>
+> This is "We Will Be OK" running as a service: the same promise, kept one conversation at a time. It
+> carries the same firewall as everything else the academies make. No one who reaches it is a lead.
+> Their words are not harvested, not marketed, and not kept to sell anything. The help is
+> unconditional, and it is free.
+>
+> It is not a crisis line and not a substitute for professional help, and it does not pretend to be. It
+> is one human offering another the thing no tool can, to be heard by someone who means it. When
+> someone needs more than that, the honest move is to point them to real help, not to hold them.
+
+The words above are the canonical promise, maintained by the Immersive Fusion academies as their
+source of record and reproduced here verbatim; they are not this project's to edit.
 
 ## Channel rules
 
